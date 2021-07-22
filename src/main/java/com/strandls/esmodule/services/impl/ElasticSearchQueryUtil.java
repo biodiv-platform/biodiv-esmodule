@@ -266,24 +266,22 @@ public class ElasticSearchQueryUtil {
 		});
 		Geometry polygonSet = new PolygonBuilder(cb).buildGeometry();
 		GeoShapeQueryBuilder qb = QueryBuilders.geoShapeQuery(geoShapeFilterField, polygonSet);
-
-		qb.relation(ShapeRelation.INTERSECTS);
-		masterBoolQuery.must(qb);
+		masterBoolQuery.minimumShouldMatch(1);
+		masterBoolQuery.should(qb);
 
 	}
 
 	protected void applyMultiPolygonQuery(List<List<MapGeoPoint>> multipolygon, BoolQueryBuilder masterBoolQuery,
 			String geoShapeFilterField) throws IOException {
 
-		for (int i = 0; i < multipolygon.size() - 1; i++) {
+		multipolygon.forEach(item -> {
 			try {
-				applyGeoPolygonQuery(multipolygon.get(i), masterBoolQuery, geoShapeFilterField);
+				applyGeoPolygonQuery(item, masterBoolQuery, geoShapeFilterField);
 
 			} catch (IOException e) {
 				logger.error(e.getMessage());
 			}
-		}
-
+		});
 	}
 
 	protected void applyMapBounds(MapBounds bounds, BoolQueryBuilder masterBoolQuery, String geoAggregationField) {
