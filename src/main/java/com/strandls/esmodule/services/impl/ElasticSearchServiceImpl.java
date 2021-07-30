@@ -525,7 +525,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	@Override
 	public AggregationResponse aggregation(String index, String type, MapSearchQuery searchQuery,
-			String geoAggregationField, String filter) throws IOException {
+			String geoAggregationField, String filter,String geoShapeFilterField) throws IOException {
 
 		logger.info("SEARCH for index: {}, type: {}", index, type);
 
@@ -533,6 +533,10 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		BoolQueryBuilder masterBoolQuery = getBoolQueryBuilder(searchQuery);
 
 		applyMapBounds(searchParams, masterBoolQuery, geoAggregationField);
+		
+		if (geoShapeFilterField != null) {
+			applyShapeFilter(searchParams, masterBoolQuery, geoShapeFilterField);
+		}
 
 		AggregationBuilder aggregation;
 

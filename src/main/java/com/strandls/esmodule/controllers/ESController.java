@@ -408,7 +408,8 @@ public class ESController {
 
 	public AggregationResponse getAggregation(@PathParam("index") String index, @PathParam("type") String type,
 			@PathParam("filter") String filter, @QueryParam("geoAggregationField") String geoAggregationField,
-			@ApiParam(name = "query") MapSearchQuery query) throws IOException {
+			@QueryParam("geoFilterField") String geoShapeFilterField, @ApiParam(name = "query") MapSearchQuery query)
+			throws IOException {
 		MapSearchParams searchParams = query.getSearchParams();
 		MapBoundParams boundParams = searchParams.getMapBoundParams();
 		MapBounds bounds = null;
@@ -420,7 +421,8 @@ public class ESController {
 					Response.status(Status.BAD_REQUEST).entity(ErrorConstants.LOCATION_FIELD_NOT_SPECIFIED).build());
 
 		try {
-			return elasticSearchService.aggregation(index, type, query, geoAggregationField, filter);
+			return elasticSearchService.aggregation(index, type, query, geoAggregationField, filter,
+					geoShapeFilterField);
 
 		} catch (Exception e) {
 			throw new WebApplicationException(
@@ -438,8 +440,8 @@ public class ESController {
 	@ApiResponses(value = { @ApiResponse(code = 400, message = "Inappropriate Data", response = String.class) })
 
 	public Response getObservationInfo(@PathParam("index") String index, @PathParam("type") String type,
-			@QueryParam("id") String id,
-			@DefaultValue("true") @QueryParam("isMaxVotedRecoId") Boolean isMaxVotedRecoId) throws IOException {
+			@QueryParam("id") String id, @DefaultValue("true") @QueryParam("isMaxVotedRecoId") Boolean isMaxVotedRecoId)
+			throws IOException {
 		try {
 			ObservationInfo info = elasticSearchService.getObservationRightPan(index, type, id, isMaxVotedRecoId);
 			return Response.status(Status.OK).entity(info).build();
