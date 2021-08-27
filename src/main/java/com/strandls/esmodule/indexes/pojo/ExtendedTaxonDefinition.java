@@ -1,13 +1,14 @@
 package com.strandls.esmodule.indexes.pojo;
 
 import java.util.List;
+import java.util.Map;
 
 public class ExtendedTaxonDefinition implements ElasticIndexes {
 
 	private Integer parent_taxon_definition_id;
 	private String group_name;
 	private List<Integer> accepted_ids;
-	private String hierarchy;
+	private List<Map<String,String>> hierarchy;
 	private String italicised_form;
 	private Integer species_id;
 	private String species_title;
@@ -52,7 +53,7 @@ public class ExtendedTaxonDefinition implements ElasticIndexes {
 	 * @param accepted_names
 	 */
 	public ExtendedTaxonDefinition(Integer parent_taxon_definition_id, String group_name, List<Integer> accepted_ids,
-			String hierarchy, String italicised_form, Integer species_id, String species_title, String path,
+			List<Map<String,String>> hierarchy, String italicised_form, Integer species_id, String species_title, String path,
 			String repr_image_id, String repr_image_url, Float group_id, String name, List<CommonName> common_names,
 			String rank, Integer id, String position, String lowercase_match_name, String canonical_form, String status,
 			List<String> accepted_names) {
@@ -103,11 +104,11 @@ public class ExtendedTaxonDefinition implements ElasticIndexes {
 		this.accepted_ids = accepted_ids;
 	}
 
-	public String getHierarchy() {
+	public List<Map<String,String>> getHierarchy() {
 		return hierarchy;
 	}
 
-	public void setHierarchy(String hierarchy) {
+	public void setHierarchy(List<Map<String,String>> hierarchy) {
 		this.hierarchy = hierarchy;
 	}
 
