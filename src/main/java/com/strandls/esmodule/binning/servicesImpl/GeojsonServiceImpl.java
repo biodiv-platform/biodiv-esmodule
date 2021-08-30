@@ -39,8 +39,8 @@ public class GeojsonServiceImpl implements GeojsonService {
 
 		Collection<Feature> features = new ArrayList<>(coordinatesList.length);
 
-		long max_count = 0;
-		long min_count = 0;
+		long maxCount = 0;
+		long minCount = 0;
 
 		for (int i = 0; i < coordinatesList.length; i++) {
 
@@ -58,12 +58,12 @@ public class GeojsonServiceImpl implements GeojsonService {
 
 			features.add(new Feature(geometry, properties));
 
-			max_count = Math.max(max_count, count);
-			min_count = Math.min(min_count, count);
+			maxCount = Math.max(maxCount, count);
+			minCount = Math.min(minCount, count);
 		}
 
 		Geojson geojson = new Geojson(features);
-		return new GeojsonData(geojson, max_count, min_count);
+		return new GeojsonData(geojson, maxCount, minCount);
 	}
 
 	private long querySearch(String index, String type, QueryBuilder query) throws IOException {
@@ -73,7 +73,6 @@ public class GeojsonServiceImpl implements GeojsonService {
 		sourceBuilder.query(query);
 
 		SearchRequest searchRequest = new SearchRequest(index);
-		searchRequest.types(type);
 		searchRequest.source(sourceBuilder);
 
 		SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);

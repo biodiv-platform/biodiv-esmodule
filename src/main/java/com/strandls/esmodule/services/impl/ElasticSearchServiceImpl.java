@@ -50,11 +50,7 @@ import org.elasticsearch.index.query.Operator;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.query.RangeQueryBuilder;
-import org.elasticsearch.index.query.TermsQueryBuilder;
-import org.elasticsearch.index.reindex.BulkByScrollResponse;
-import org.elasticsearch.index.reindex.UpdateByQueryRequest;
 import org.elasticsearch.script.Script;
-import org.elasticsearch.script.ScriptType;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
@@ -152,8 +148,10 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	 */
 	@Override
 	public MapQueryResponse create(String index, String type, String documentId, String document) throws IOException {
-
-		logger.info("Trying to create index: {}, type: {} & id: {}", index, type, documentId);
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+		String documentIdParam = documentId.replaceAll("[\n\r\t]", "_");
+		logger.info("Trying to create index: {}, type: {} & id: {}", indexParam, typeParam, documentIdParam);
 
 		IndexRequest request = new IndexRequest(index);
 		request.id(documentId);
@@ -175,7 +173,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		MapQueryStatus queryStatus = MapQueryStatus.valueOf(indexResponse.getResult().name());
 
-		logger.info("Created index: {}, type: {} & id: {} with status {}", index, type, documentId, queryStatus);
+		logger.info("Created index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
+				queryStatus);
 
 		return new MapQueryResponse(queryStatus, failureReason.toString());
 	}
@@ -189,13 +188,16 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	 */
 	@Override
 	public MapDocument fetch(String index, String type, String documentId) throws IOException {
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+		String documentIdParam = documentId.replaceAll("[\n\r\t]", "_");
 
-		logger.info("Trying to fetch index: {}, type: {} & id: {}", index, type, documentId);
+		logger.info("Trying to fetch index: {}, type: {} & id: {}", indexParam, typeParam, documentIdParam);
 
 		GetRequest request = new GetRequest(index, documentId);
 		GetResponse response = client.get(request, RequestOptions.DEFAULT);
 
-		logger.info("Fetched index: {}, type: {} & id: {} with status {}", index, type, documentId,
+		logger.info("Fetched index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
 				response.isExists());
 
 		return new MapDocument(response.getSourceAsString());
@@ -211,8 +213,10 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	@Override
 	public MapQueryResponse update(String index, String type, String documentId, Map<String, Object> document)
 			throws IOException {
-
-		logger.info("Trying to update index: {}, type: {} & id: {}", index, type, documentId);
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+		String documentIdParam = documentId.replaceAll("[\n\r\t]", "_");
+		logger.info("Trying to update index: {}, type: {} & id: {}", indexParam, typeParam, documentIdParam);
 
 		UpdateRequest request = new UpdateRequest(index, documentId);
 		request.doc(document);
@@ -229,7 +233,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		MapQueryStatus queryStatus = MapQueryStatus.valueOf(updateResponse.getResult().name());
 
-		logger.info("Updated index: {}, type: {} & id: {} with status {}", index, type, documentId, queryStatus);
+		logger.info("Updated index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
+				queryStatus);
 
 		return new MapQueryResponse(queryStatus, failureReason);
 	}
@@ -243,8 +248,11 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	 */
 	@Override
 	public MapQueryResponse delete(String index, String type, String documentId) throws IOException {
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+		String documentIdParam = documentId.replaceAll("[\n\r\t]", "_");
 
-		logger.info("Trying to delete index: {}, type: {} & id: {}", index, type, documentId);
+		logger.info("Trying to delete index: {}, type: {} & id: {}", indexParam, typeParam, documentIdParam);
 
 		DeleteRequest request = new DeleteRequest(index, documentId);
 		DeleteResponse deleteResponse = client.delete(request, RequestOptions.DEFAULT);
@@ -261,7 +269,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		MapQueryStatus queryStatus = MapQueryStatus.valueOf(deleteResponse.getResult().name());
 
-		logger.info("Deleted index: {}, type: {} & id: {} with status {}", index, type, documentId, queryStatus);
+		logger.info("Deleted index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
+				queryStatus);
 
 		return new MapQueryResponse(queryStatus, failureReason);
 	}
@@ -295,13 +304,14 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	@Override
 	public List<MapQueryResponse> bulkUpload(String index, String type, String jsonArray) throws IOException {
 		List<MapQueryResponse> responses = new ArrayList<>();
-
-		logger.info("Trying to bulk upload index: {}, type: {}", index, type);
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+		logger.info("Trying to bulk upload index: {}, type: {}", indexParam, typeParam);
 
 		JsonNode[] jsons = parseJson(jsonArray, responses);
 		if (!responses.isEmpty()) {
 			logger.error("Json exception-{}, while trying to bulk upload for index:{}, type: {}",
-					responses.get(0).getMessage(), index, type);
+					responses.get(0).getMessage(), indexParam, typeParam);
 			return responses;
 		}
 
@@ -314,7 +324,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			request.add(ir);
 
 		}
-		// BulkResponse bulkResponse = client.bulk(request);
+
 		BulkResponse bulkResponse = client.bulk(request, RequestOptions.DEFAULT);
 		for (BulkItemResponse bulkItemResponse : bulkResponse) {
 
@@ -339,7 +349,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				queryStatus = MapQueryStatus.valueOf(indexResponse.getResult().name());
 			}
 
-			logger.info(" For index: {}, type: {}, bulk upload id: {}, the status is {}", index, type,
+			logger.info(" For index: {}, type: {}, bulk upload id: {}, the status is {}", indexParam, typeParam,
 					bulkItemResponse.getId(), queryStatus);
 
 			responses.add(new MapQueryResponse(queryStatus, failureReason.toString()));
@@ -351,8 +361,9 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	@Override
 	public List<MapQueryResponse> bulkUpdate(String index, String type, List<Map<String, Object>> updateDocs)
 			throws IOException {
-
-		logger.info("Trying to bulk update index: {}, type: {}", index, type);
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+		logger.info("Trying to bulk update index: {}, type: {}", indexParam, typeParam);
 
 		BulkRequest request = new BulkRequest();
 
@@ -386,7 +397,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				queryStatus = MapQueryStatus.valueOf(updateResponse.getResult().name());
 			}
 
-			logger.info(" For index: {}, type: {}, bulk update id: {}, the status is {}", index, type,
+			logger.info(" For index: {}, type: {}, bulk update id: {}, the status is {}", indexParam, typeParam,
 					bulkItemResponse.getId(), queryStatus);
 
 			responses.add(new MapQueryResponse(queryStatus, failureReason.toString()));
@@ -396,7 +407,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	}
 
-	private MapResponse querySearch(String index, String type, QueryBuilder query, MapSearchParams searchParams,
+	private MapResponse querySearch(String index, QueryBuilder query, MapSearchParams searchParams,
 			String geoAggregationField, Integer geoAggegationPrecision) throws IOException {
 
 		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
@@ -464,15 +475,20 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	@Override
 	public MapResponse termSearch(String index, String type, String key, String value, MapSearchParams searchParams,
 			String geoAggregationField, Integer geoAggegationPrecision) throws IOException {
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+		String keyParam = key.replaceAll("[\n\r\t]", "_");
+		String valueParam = value != null ? value.replaceAll("[\n\r\t]", "_") : null;
 
-		logger.info("Term search for index: {}, type: {}, key: {}, value: {}", index, type, key, value);
+		logger.info("Term search for index: {}, type: {}, key: {}, value: {}", indexParam, typeParam, keyParam,
+				valueParam);
 		QueryBuilder query;
 		if (value != null)
 			query = QueryBuilders.termQuery(key, value);
 		else
 			query = QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(key));
 
-		return querySearch(index, type, query, searchParams, geoAggregationField, geoAggegationPrecision);
+		return querySearch(index, query, searchParams, geoAggregationField, geoAggegationPrecision);
 
 	}
 
@@ -488,8 +504,9 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	@Override
 	public MapResponse boolSearch(String index, String type, List<MapBoolQuery> queries, MapSearchParams searchParams,
 			String geoAggregationField, Integer geoAggegationPrecision) throws IOException {
-
-		logger.info("Bool search for index: {}, type: {}", index, type);
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+		logger.info("Bool search for index: {}, type: {}", indexParam, typeParam);
 		BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
 		for (MapBoolQuery query : queries) {
 			if (query.getValues() != null)
@@ -498,7 +515,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				boolQuery.mustNot(QueryBuilders.existsQuery(query.getKey()));
 		}
 
-		return querySearch(index, type, boolQuery, searchParams, geoAggregationField, geoAggegationPrecision);
+		return querySearch(index, boolQuery, searchParams, geoAggregationField, geoAggegationPrecision);
 	}
 
 	/*
@@ -513,21 +530,24 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	@Override
 	public MapResponse rangeSearch(String index, String type, List<MapRangeQuery> queries, MapSearchParams searchParams,
 			String geoAggregationField, Integer geoAggegationPrecision) throws IOException {
-
-		logger.info("Range search for index: {}, type: {}", index, type);
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+		logger.info("Range search for index: {}, type: {}", indexParam, typeParam);
 		BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
 		for (MapRangeQuery query : queries) {
 			boolQuery.must(QueryBuilders.rangeQuery(query.getKey()).from(query.getStart()).to(query.getEnd()));
 		}
 
-		return querySearch(index, type, boolQuery, searchParams, geoAggregationField, geoAggegationPrecision);
+		return querySearch(index, boolQuery, searchParams, geoAggregationField, geoAggegationPrecision);
 	}
 
 	@Override
 	public AggregationResponse aggregation(String index, String type, MapSearchQuery searchQuery,
 			String geoAggregationField, String filter,String geoShapeFilterField) throws IOException {
-
-		logger.info("SEARCH for index: {}, type: {}", index, type);
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+		logger.info("SEARCH for index: {}, type: {}", indexParam, typeParam);
+	
 
 		MapSearchParams searchParams = searchQuery.getSearchParams();
 		BoolQueryBuilder masterBoolQuery = getBoolQueryBuilder(searchQuery);
@@ -553,7 +573,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		if (filter.equals(Constants.MAX_VOTED_RECO) || filter.equals(Constants.MVR_TAXON_STATUS)) {
 			AggregationResponse temp = null;
 			aggregation = AggregationBuilders.filter(Constants.AVAILABLE, QueryBuilders.existsQuery(filter));
-			temp = groupAggregation(index, type, aggregation, masterBoolQuery, filter);
+			temp = groupAggregation(index, aggregation, masterBoolQuery, filter);
 			HashMap<Object, Long> t = new HashMap<>();
 			if (temp != null) {
 				for (Map.Entry<Object, Long> entry : temp.getGroupAggregation().entrySet()) {
@@ -564,7 +584,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				aggregation = AggregationBuilders.missing("miss").field(filter.concat(".id"));
 			if (filter.equals(Constants.MVR_TAXON_STATUS))
 				aggregation = AggregationBuilders.missing("miss").field(filter.concat(".keyword"));
-			temp = groupAggregation(index, type, aggregation, masterBoolQuery, filter);
+			temp = groupAggregation(index, aggregation, masterBoolQuery, filter);
 			if (temp != null) {
 				for (Map.Entry<Object, Long> entry : temp.getGroupAggregation().entrySet()) {
 					t.put(entry.getKey(), entry.getValue());
@@ -573,7 +593,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			aggregationResponse.setGroupAggregation(t);
 
 		} else {
-			aggregationResponse = groupAggregation(index, type, aggregation, masterBoolQuery, filter);
+			aggregationResponse = groupAggregation(index, aggregation, masterBoolQuery, filter);
 
 		}
 		return aggregationResponse;
@@ -631,11 +651,11 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	public List<UploadersInfo> uploaderInfo(String index, String userIds) {
 		List<String> l = Arrays.asList(userIds.split(","));
 		List<UploadersInfo> result = new ArrayList<>();
-
+		String authorIdConstant = "author_id";
 		for (int i = 0; i < l.size(); i++) {
 			String id = l.get(i);
 			BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery()
-					.must(QueryBuilders.termQuery("author_id", id));
+					.must(QueryBuilders.termQuery(authorIdConstant, id));
 			SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
 
 			sourceBuilder.query(boolQueryBuilder);
@@ -649,7 +669,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 					Map<String, Object> sourceMap = hit.getSourceAsMap();
 					String name = String.valueOf(sourceMap.get("created_by"));
 					String pic = String.valueOf(sourceMap.get("profile_pic"));
-					Long authorId = Long.parseLong(String.valueOf(sourceMap.get("author_id")));
+					Long authorId = Long.parseLong(String.valueOf(sourceMap.get(authorIdConstant)));
 					UploadersInfo uploaderInfo = new UploadersInfo(name, pic, authorId);
 					result.add(uploaderInfo);
 				}
@@ -672,15 +692,16 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	public MapResponse search(String index, String type, MapSearchQuery searchQuery, String geoAggregationField,
 			Integer geoAggegationPrecision, Boolean onlyFilteredAggregation, String termsAggregationField,
 			String geoShapeFilterField) throws IOException {
-
-		logger.info("SEARCH for index: {}, type: {}", index, type);
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+		logger.info("SEARCH for index: {}, type: {}", indexParam, typeParam);
 
 		MapSearchParams searchParams = searchQuery.getSearchParams();
 		BoolQueryBuilder masterBoolQuery = getBoolQueryBuilder(searchQuery);
 
 		GeoGridAggregationBuilder geoGridAggregationBuilder = getGeoGridAggregationBuilder(geoAggregationField,
 				geoAggegationPrecision);
-		MapDocument aggregateSearch = aggregateSearch(index, type, geoGridAggregationBuilder, masterBoolQuery);
+		MapDocument aggregateSearch = aggregateSearch(index, geoGridAggregationBuilder, masterBoolQuery);
 		String geohashAggregation = null;
 		if (aggregateSearch != null)
 			geohashAggregation = aggregateSearch.getDocument().toString();
@@ -693,7 +714,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		if (onlyFilteredAggregation != null && onlyFilteredAggregation) {
 			applyMapBounds(searchParams, masterBoolQuery, geoAggregationField);
-			aggregateSearch = aggregateSearch(index, type, geoGridAggregationBuilder, masterBoolQuery);
+			aggregateSearch = aggregateSearch(index, geoGridAggregationBuilder, masterBoolQuery);
 			if (aggregateSearch != null)
 				geohashAggregation = aggregateSearch.getDocument().toString();
 			return new MapResponse(new ArrayList<>(), 0, geohashAggregation, geohashAggregation, termsAggregation);
@@ -702,7 +723,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		if (geoShapeFilterField != null) {
 			applyShapeFilter(searchParams, masterBoolQuery, geoShapeFilterField);
 		}
-		MapResponse mapResponse = querySearch(index, type, masterBoolQuery, searchParams, geoAggregationField,
+		MapResponse mapResponse = querySearch(index,masterBoolQuery, searchParams, geoAggregationField,
 				geoAggegationPrecision);
 		mapResponse.setViewFilteredGeohashAggregation(mapResponse.getGeohashAggregation());
 		mapResponse.setGeohashAggregation(geohashAggregation);
@@ -721,11 +742,13 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	@Override
 	public MapDocument geohashAggregation(String index, String type, String field, Integer precision)
 			throws IOException {
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+		String fieldParam = field.replaceAll("[\n\r\t]", "_");
+		logger.info("GeoHash aggregation for index: {}, type: {} on field: {} with precision: {}", indexParam,
+				typeParam, fieldParam, precision);
 
-		logger.info("GeoHash aggregation for index: {}, type: {} on field: {} with precision: {}", index, type, field,
-				precision);
-
-		return aggregateSearch(index, type, getGeoGridAggregationBuilder(field, precision), null);
+		return aggregateSearch(index, getGeoGridAggregationBuilder(field, precision), null);
 	}
 
 	/*
@@ -743,19 +766,23 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		if (size == null)
 			size = 500;
-
-		logger.info("Terms aggregation for index: {}, type: {} on field: {} and sub field: {} with size: {}", index,
-				type, field, subField, size);
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+		String fieldParam = field.replaceAll("[\n\r\t]", "_");
+		String subfieldParam = subField.replaceAll("[\n\r\t]", "_");
+		String sizeParam = size.toString().replaceAll("[\n\r\t]", "_");
+		logger.info("Terms aggregation for index: {}, type: {} on field: {} and sub field: {} with size: {}",
+				indexParam, typeParam, fieldParam, subfieldParam, sizeParam);
 
 		BoolQueryBuilder boolQuery = getBoolQueryBuilder(query);
 		if (query.getSearchParams() != null) {
 			applyMapBounds(query.getSearchParams(), boolQuery, locationField);
 		}
 
-		return aggregateSearch(index, type, getTermsAggregationBuilder(field, subField, size), boolQuery);
+		return aggregateSearch(index, getTermsAggregationBuilder(field, subField, size), boolQuery);
 	}
 
-	private MapDocument aggregateSearch(String index, String type, AggregationBuilder aggQuery, QueryBuilder query)
+	private MapDocument aggregateSearch(String index, AggregationBuilder aggQuery, QueryBuilder query)
 			throws IOException {
 
 		if (aggQuery == null)
@@ -784,8 +811,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	}
 
-	private AggregationResponse groupAggregation(String index, String type, AggregationBuilder aggQuery,
-			QueryBuilder query, String filter) throws IOException {
+	private AggregationResponse groupAggregation(String index, AggregationBuilder aggQuery, QueryBuilder query,
+			String filter) throws IOException {
 
 		if (aggQuery == null)
 			return null;
@@ -883,10 +910,10 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	}
 
 	@Override
-	public List<ObservationNearBy> observationNearBy(String index, String type, Double lat, Double Lon)
+	public List<ObservationNearBy> observationNearBy(String index, String type, Double lat, Double lon)
 			throws IOException {
 
-		GeoDistanceSortBuilder sortBuilder = SortBuilders.geoDistanceSort(Constants.LOCATION, lat, Lon);
+		GeoDistanceSortBuilder sortBuilder = SortBuilders.geoDistanceSort(Constants.LOCATION, lat, lon);
 		sortBuilder.order(SortOrder.ASC);
 		sortBuilder.unit(DistanceUnit.KILOMETERS);
 		sortBuilder.geoDistance(GeoDistance.PLANE);
@@ -923,7 +950,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 			lat2 = loc.getLat();
 			lon2 = loc.getLon();
-			distance = distanceCalculate(lat, Lon, lat2, lon2);
+			distance = distanceCalculate(lat, lon, lat2, lon2);
 
 			nearBy.add(
 					new ObservationNearBy(Long.parseLong(hit.getSourceAsMap().get(Constants.OBSERVATION_ID).toString()),
@@ -1033,7 +1060,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String canonicalFieldName = "canonical_form";
 
 		BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
-		if (checkOnAllParam == true) {
+		if (checkOnAllParam) {
 			boolQueryBuilder.must(QueryBuilders.matchQuery(scientificFieldName, scientificText).operator(Operator.AND));
 		}
 		boolQueryBuilder.must(QueryBuilders.matchPhraseQuery(canonicalFieldName, canonicalText));
@@ -1260,28 +1287,20 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	private AggregationBuilder populateDataAggregation() {
 
-		AggregationBuilder aggs = termsAggregation("bucket_by_module", "module.keyword")
+		return termsAggregation("bucket_by_module", "module.keyword")
 				.subAggregation(termsAggregation("bucket_by_activity_category", "activity_category.keyword"));
-		return aggs;
 	}
 
 	private AggregationBuilder termsAggregation(String aggregationName, String field, Integer totalBucket) {
-		AggregationBuilder aggs = AggregationBuilders.terms(aggregationName).field(field).size(totalBucket);
-		return aggs;
+		return AggregationBuilders.terms(aggregationName).field(field).size(totalBucket);
 	}
 
 	private AggregationBuilder termsAggregation(String aggregationName, String field) {
-
-		AggregationBuilder aggs = AggregationBuilders.terms(aggregationName).field(field).size(100);
-		return aggs;
+		return AggregationBuilders.terms(aggregationName).field(field).size(100);
 	}
 
 	private AggregationBuilder filterAggregation(String aggregationName, String field, String fieldValue) {
-
-		AggregationBuilder aggs = AggregationBuilders.filter(aggregationName,
-				QueryBuilders.termQuery(field, fieldValue));
-
-		return aggs;
+		return AggregationBuilders.filter(aggregationName, QueryBuilders.termQuery(field, fieldValue));
 	}
 
 	private BucketScriptPipelineAggregationBuilder getBucketScriptAggregation() {
@@ -1290,9 +1309,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		bucketsPathsMap.put("content", "group_by_score_category_content>_count");
 		Script script = new Script("Math.round(10*(Math.log10(params.content)+Math.log10(params.engagement)))");
 
-		BucketScriptPipelineAggregationBuilder bucketScript = PipelineAggregatorBuilders
-				.bucketScript(Constants.ACTIVITY_SCORE, bucketsPathsMap, script);
-		return bucketScript;
+		return PipelineAggregatorBuilders.bucketScript(Constants.ACTIVITY_SCORE, bucketsPathsMap, script);
 	}
 
 	private BucketSortPipelineAggregationBuilder getBucketSortAggregation(String sortingValue, int topUsers) {
@@ -1307,10 +1324,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		FieldSortBuilder sortOn = new FieldSortBuilder(sortOnAggregation).order(SortOrder.DESC);
 		sortingCriteriaList.add(sortOn);
 
-		BucketSortPipelineAggregationBuilder bucketSort = PipelineAggregatorBuilders
-				.bucketSort("bucket_sorting", sortingCriteriaList).size(topUsers);
+		return PipelineAggregatorBuilders.bucketSort("bucket_sorting", sortingCriteriaList).size(topUsers);
 
-		return bucketSort;
 	}
 
 	private List<ExtendedTaxonDefinition> processElasticResponse(SearchResponse searchResponse) {
@@ -1559,7 +1574,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		List<CustomFields> customFieldList = new ArrayList<CustomFields>();
 
 		for (Terms.Bucket b : terms.getBuckets()) {
-			String customFieldArray[] = b.getKeyAsString().split("\\|");
+			String[] customFieldArray = b.getKeyAsString().split("\\|");
 //			pattern  = cfId | cfName | cfFieldType | cfDataType | cfValueIcon |cfValue
 
 			if (customFieldMap.containsKey(Long.parseLong(customFieldArray[0]))) {
@@ -1626,28 +1641,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		return new ArrayList<>();
 	}
 
-	@Override
-	public String forceUpdateIndexField(String index, String type, String field, String value,
-			List<String> documentIds) {
-		UpdateByQueryRequest updateRequest = new UpdateByQueryRequest(index);
-		updateRequest.setConflicts("proceed");
-		updateRequest.setQuery(new TermsQueryBuilder("_id", documentIds));
-		updateRequest.setScript(new Script(ScriptType.INLINE, "painless", "ctx._source." + field + "=" + value,
-				Collections.emptyMap()));
-		updateRequest.setRefresh(true);
-		try {
-			BulkByScrollResponse response = client.updateByQuery(updateRequest, RequestOptions.DEFAULT);
-			if (response.getUpdated() == response.getTotal()) {
-				logger.info("update status - {}", response.getBulkFailures());
-				return "Documents Sent - " + documentIds.size() + "\nDocument found in index - " + response.getTotal()
-						+ "\nDocument Updated - " + response.getUpdated();
-			}
-		} catch (IOException e) {
-			logger.error("Force Update Exception - {}", e.getMessage());
-		}
-		return null;
-	}
-
+	
 	@SuppressWarnings("unchecked")
 	@Override
 	public String fetchIndex() {
@@ -1723,8 +1717,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 			}
 			Long total = Long.parseLong(String.valueOf(terms.getBuckets().size()));
-			AuthorUploadedObservationInfo result = new AuthorUploadedObservationInfo(total, maxVotedRecoFreqs);
-			return result;
+			return new AuthorUploadedObservationInfo(total, maxVotedRecoFreqs);
 
 		} catch (Exception e) {
 			logger.error(e.getMessage());

@@ -2,7 +2,6 @@ package com.strandls.esmodule.services;
 
 import java.io.IOException;
 
-import javax.ws.rs.core.Response;
 
 import com.strandls.esmodule.models.MapDocument;
 import com.strandls.esmodule.models.MapQueryResponse;

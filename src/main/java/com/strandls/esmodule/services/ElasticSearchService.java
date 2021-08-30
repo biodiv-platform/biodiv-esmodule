@@ -30,8 +30,9 @@ import com.strandls.esmodule.models.query.MapSearchQuery;
  * @author mukund
  */
 public interface ElasticSearchService {
-	
-	public List<UploadersInfo> uploaderInfo(String index,String userIds);
+
+	public List<UploadersInfo> uploaderInfo(String index, String userIds);
+
 	public List<IdentifiersInfo> identifierInfo(String index, String userIds);
 
 	/**
@@ -228,8 +229,7 @@ public interface ElasticSearchService {
 	 */
 	ObservationInfo getObservationRightPan(String index, String type, String id, Boolean isMaxVotedRecoId) throws IOException;
 
-	List<ObservationNearBy> observationNearBy(String index, String type, Double lat, Double Lon) throws IOException;
-
+	List<ObservationNearBy> observationNearBy(String index, String type, Double lat, Double lon) throws IOException;
 
 	/**
 	 * @param index  : index to be searched upon
@@ -307,11 +307,10 @@ public interface ElasticSearchService {
 
 	public List<ObservationLatLon> getSpeciesCoordinates(String index, String type, String speciesId);
 
-	public String forceUpdateIndexField(String index, String type, String field, String value,
-			List<String> documentIds);
+	
 
 	public String fetchIndex();
-	
+
 	public AuthorUploadedObservationInfo getUserData(String index, String type, Long userId, Integer size, Long sGroup,
 			Boolean hasMedia);
 }

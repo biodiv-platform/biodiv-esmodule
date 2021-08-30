@@ -6,8 +6,8 @@
 	<artifactId>esmodule</artifactId>
 	<packaging>war</packaging>
 	<version>1.0.0</version>
-	<name>ESModule Maven Webapp</name>
-	<url>http://maven.apache.org</url>
+	<name>biodiv-esmodule</name>
+	<url>https://github.com/strandls/biodiv-esmodule</url>
 
 	<properties>
 
@@ -26,6 +26,11 @@
 		<srcDir>src/main/webapp</srcDir>
 		<base-path>/esmodule-api/api</base-path>
 		<location>com.strandls.esmodule</location>
+
+		<!-- Sonar Cloud -->
+		<sonar.projectKey>strandls_biodiv-esmodule</sonar.projectKey>
+		<sonar.organization>strandls</sonar.organization>
+		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
 	</properties>
 
 	<distributionManagement>

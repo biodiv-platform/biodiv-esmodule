@@ -48,7 +48,7 @@ public class ElasticSearchGeoServiceImpl implements ElasticSearchGeoService {
 	@Inject
 	private ElasticSearchClient client;
 
-	private MapResponse querySearch(String index, String type, QueryBuilder query) throws IOException {
+	private MapResponse querySearch(String index, QueryBuilder query) throws IOException {
 
 		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
 
@@ -87,7 +87,7 @@ public class ElasticSearchGeoServiceImpl implements ElasticSearchGeoService {
 		GeoBoundingBoxQueryBuilder query = QueryBuilders.geoBoundingBoxQuery(geoField).setCorners(top, left, bottom,
 				right);
 
-		return querySearch(index, type, query);
+		return querySearch(index, query);
 	}
 
 	@Override
@@ -136,7 +136,7 @@ public class ElasticSearchGeoServiceImpl implements ElasticSearchGeoService {
 			}
 			return hashToCount;
 		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error(e.getMessage());
 		}
 		return null;
 	}
@@ -160,19 +160,19 @@ public class ElasticSearchGeoServiceImpl implements ElasticSearchGeoService {
 		SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
 		Aggregations aggregations = searchResponse.getAggregations();
 		GeoBounds geoBounds = aggregations.get("aggs");
-		
+
 		List<List<Double>> result = new ArrayList<List<Double>>();
 		List<Double> topLeft = new ArrayList<Double>();
 		topLeft.add(geoBounds.topLeft().getLat());
 		topLeft.add(geoBounds.topLeft().getLon());
-		
+
 		List<Double> bottomRight = new ArrayList<Double>();
 		bottomRight.add(geoBounds.bottomRight().getLat());
 		bottomRight.add(geoBounds.bottomRight().getLon());
-		
+
 		result.add(topLeft);
 		result.add(bottomRight);
-		
+
 		return result;
 	}
 

@@ -1,8 +1,6 @@
 package com.strandls.esmodule.controllers;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +50,6 @@ import com.strandls.esmodule.models.query.MapBoolQuery;
 import com.strandls.esmodule.models.query.MapRangeQuery;
 import com.strandls.esmodule.models.query.MapSearchQuery;
 import com.strandls.esmodule.services.ElasticAdminSearchService;
-import com.strandls.esmodule.services.ElasticSearchDownloadService;
 import com.strandls.esmodule.services.ElasticSearchService;
 import com.strandls.esmodule.utils.ReIndexingThread;
 import com.strandls.esmodule.utils.UtilityMethods;
@@ -78,9 +75,6 @@ public class ESController {
 
 	@Inject
 	public ElasticAdminSearchService elasticAdminSearchService;
-
-	@Inject
-	public ElasticSearchDownloadService elasticSearchDownloadService;
 
 	@Inject
 	public UtilityMethods utilityMethods;
@@ -549,25 +543,6 @@ public class ESController {
 		}
 	}
 
-	@POST
-	@Path(ApiConstants.DOWNLOAD + "/{index}/{type}")
-	@Consumes(MediaType.APPLICATION_JSON)
-	@Produces(MediaType.APPLICATION_JSON)
-
-	@ApiOperation(value = "Download of Document", notes = "Returns path of Document", response = String.class)
-	@ApiResponses(value = { @ApiResponse(code = 500, message = "ERROR", response = String.class) })
-
-	public String download(@PathParam("index") String index, @PathParam("type") String type,
-			@QueryParam("geoField") String geoField, @QueryParam("filePath") String filePath,
-			@QueryParam("fileType") String fileType, @ApiParam(name = "query") MapSearchQuery query) {
-		try {
-			return elasticSearchDownloadService.downloadSearch(index, type, query, geoField, filePath, fileType);
-		} catch (IOException e) {
-			throw new WebApplicationException(
-					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
-		}
-	}
-
 	// ---------- Admin Services -------------
 
 	@GET
@@ -796,9 +771,9 @@ public class ESController {
 		type = utilityMethods.getEsIndexTypeConstant(type);
 		List<LinkedHashMap<String, LinkedHashMap<String, String>>> records = elasticSearchService.getUserScore(index,
 				type, Integer.parseInt(authorId), timeFilter);
-		UserScore record = new UserScore();
-		record.setRecord(records);
-		return Response.status(Status.OK).entity(record).build();
+		UserScore userScoreRecord = new UserScore();
+		userScoreRecord.setRecord(records);
+		return Response.status(Status.OK).entity(userScoreRecord).build();
 	}
 
 	@GET
@@ -840,24 +815,6 @@ public class ESController {
 	}
 
 	@GET
-	@Path(ApiConstants.FORCEUPDATE)
-	@Consumes(MediaType.TEXT_PLAIN)
-	@Produces(MediaType.TEXT_PLAIN)
-	@ApiOperation(value = "force update of field in elastic index", notes = "return succesful response", response = String.class)
-	@ApiResponses(value = { @ApiResponse(code = 400, message = "Unable to make update", response = String.class) })
-	public Response forceUpdateIndexField(@QueryParam("index") String index, @QueryParam("type") String type,
-			@QueryParam("field") String field, @QueryParam("value") String value, @QueryParam("ids") String ids) {
-		List<String> documentIds = new ArrayList<String>(Arrays.asList(ids.trim().split("\\s*,\\s*")));
-		index = utilityMethods.getEsIndexConstants(index);
-		type = utilityMethods.getEsIndexTypeConstant(type);
-		String response = elasticSearchService.forceUpdateIndexField(index, type, field, value, documentIds);
-		if (response.contains("fail"))
-			return Response.status(Status.BAD_REQUEST).entity(response).build();
-		else
-			return Response.status(Status.OK).entity(response).build();
-	}
-
-	@GET
 	@Path(ApiConstants.FETCHINDEX)
 	@Produces(MediaType.APPLICATION_JSON)
 	@ApiOperation(value = "fetch index information from elastic", notes = "return succesful response", response = String.class)
@@ -884,11 +841,11 @@ public class ESController {
 			@QueryParam("sGroup") String sGroup, @QueryParam("hasMedia") Boolean hasMedia) {
 		try {
 			Long aId = Long.parseLong(authorId);
-			Integer Size = Integer.parseInt(size);
+			Integer sizeInteger = Integer.parseInt(size);
 			Long speciesGroup = null;
 			if (sGroup != null)
 				speciesGroup = Long.parseLong(sGroup);
-			AuthorUploadedObservationInfo result = elasticSearchService.getUserData(index, type, aId, Size,
+			AuthorUploadedObservationInfo result = elasticSearchService.getUserData(index, type, aId, sizeInteger,
 					speciesGroup, hasMedia);
 			return Response.status(Status.OK).entity(result).build();
 		} catch (Exception e) {

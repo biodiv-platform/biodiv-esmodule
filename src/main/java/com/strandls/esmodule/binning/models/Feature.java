@@ -10,7 +10,7 @@ import java.util.Map;
  */
 public class Feature {
 
-	private final String type = "Feature";
+	private static final String type = "Feature";
 
 	private Geometry geometry;
 
