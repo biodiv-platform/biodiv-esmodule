@@ -1057,7 +1057,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			String scientificText, String canonicalName, String canonicalText, Boolean checkOnAllParam) {
 
 		String scientificFieldName = "name.raw";
-		String canonicalFieldName = "canonical_form";
+		String canonicalFieldName = "canonical_form.keyword";
 
 		BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
 		if (checkOnAllParam) {
