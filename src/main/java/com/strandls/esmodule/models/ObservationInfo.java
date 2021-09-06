@@ -5,6 +5,7 @@ package com.strandls.esmodule.models;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author Abhishek Rudra
@@ -12,7 +13,7 @@ import java.util.List;
  */
 public class ObservationInfo {
 
-	private HashMap<Object, Long> monthAggregation;
+	private Map<Object, Long> monthAggregation;
 	private List<SimilarObservation> similarObservation;
 	private List<ObservationMapInfo> latlon;
 
@@ -28,7 +29,7 @@ public class ObservationInfo {
 	 * @param similarObservation
 	 * @param latlon
 	 */
-	public ObservationInfo(HashMap<Object, Long> monthAggregation, List<SimilarObservation> similarObservation,
+	public ObservationInfo(Map<Object, Long> monthAggregation, List<SimilarObservation> similarObservation,
 			List<ObservationMapInfo> latlon) {
 		super();
 		this.monthAggregation = monthAggregation;
@@ -36,7 +37,7 @@ public class ObservationInfo {
 		this.latlon = latlon;
 	}
 
-	public HashMap<Object, Long> getMonthAggregation() {
+	public Map<Object, Long> getMonthAggregation() {
 		return monthAggregation;
 	}
 

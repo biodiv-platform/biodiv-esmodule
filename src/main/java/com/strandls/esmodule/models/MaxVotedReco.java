@@ -14,8 +14,7 @@ public class MaxVotedReco {
 
 	private Long id;
 	private String scientific_name;
-	private Long rank;
-	private String ranktext;
+	private String rank;
 	private String taxonstatus;
 
 	/**
@@ -29,15 +28,13 @@ public class MaxVotedReco {
 	 * @param id
 	 * @param scientific_name
 	 * @param rank
-	 * @param ranktext
 	 * @param taxonstatus
 	 */
-	public MaxVotedReco(Long id, String scientific_name, Long rank, String ranktext, String taxonstatus) {
+	public MaxVotedReco(Long id, String scientific_name, String rank, String taxonstatus) {
 		super();
 		this.id = id;
 		this.scientific_name = scientific_name;
 		this.rank = rank;
-		this.ranktext = ranktext;
 		this.taxonstatus = taxonstatus;
 	}
 
@@ -57,20 +54,12 @@ public class MaxVotedReco {
 		this.scientific_name = scientific_name;
 	}
 
-	public Long getRank() {
+	public String getRank() {
 		return rank;
 	}
 
-	public void setRank(Long rank) {
+	public void setRank(String rank) {
 		this.rank = rank;
-	}
-
-	public String getRanktext() {
-		return ranktext;
-	}
-
-	public void setRanktext(String ranktext) {
-		this.ranktext = ranktext;
 	}
 
 	public String getTaxonstatus() {

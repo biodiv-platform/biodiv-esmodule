@@ -1,14 +1,20 @@
 package com.strandls.esmodule.services.impl;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.lucene.search.join.ScoreMode;
 import org.elasticsearch.common.geo.GeoPoint;
+import org.elasticsearch.common.geo.ShapeRelation;
+import org.elasticsearch.common.geo.builders.CoordinatesBuilder;
+import org.elasticsearch.common.geo.builders.PolygonBuilder;
+import org.elasticsearch.geometry.Geometry;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.ExistsQueryBuilder;
 import org.elasticsearch.index.query.GeoBoundingBoxQueryBuilder;
 import org.elasticsearch.index.query.GeoPolygonQueryBuilder;
+import org.elasticsearch.index.query.GeoShapeQueryBuilder;
 import org.elasticsearch.index.query.MatchPhraseQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
@@ -17,6 +23,8 @@ import org.elasticsearch.index.query.TermsQueryBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGridAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.strandls.esmodule.models.MapBoundParams;
 import com.strandls.esmodule.models.MapBounds;
@@ -38,6 +46,8 @@ import com.strandls.esmodule.models.query.MapSearchQuery;
 public class ElasticSearchQueryUtil {
 
 	private static final int SHARD_SIZE = 100;
+
+	private final Logger logger = LoggerFactory.getLogger(ElasticSearchQueryUtil.class);
 
 	private QueryBuilder getNestedQueryBuilder(MapQuery query, QueryBuilder queryBuilder) {
 		if (query.getPath() == null)
@@ -172,10 +182,15 @@ public class ElasticSearchQueryUtil {
 				masterBoolQuery);
 		return masterBoolQuery;
 	}
-	
-	public MatchPhraseQueryBuilder getBoolQueryBuilderObservationPan(String maxVotedRecoId) {
-		
-		MatchPhraseQueryBuilder masterBoolQueryBuilder = QueryBuilders.matchPhraseQuery("max_voted_reco.id", maxVotedRecoId);
+
+	public MatchPhraseQueryBuilder getBoolQueryBuilderObservationPan(String id, Boolean isMaxVotedRecoId) {
+
+		MatchPhraseQueryBuilder masterBoolQueryBuilder = null;
+		if (isMaxVotedRecoId)
+			masterBoolQueryBuilder = QueryBuilders.matchPhraseQuery("max_voted_reco.id", id);
+		else
+//			taxonomyId
+			masterBoolQueryBuilder = QueryBuilders.matchPhraseQuery("max_voted_reco.hierarchy.taxon_id", id);
 		return masterBoolQueryBuilder;
 	}
 
@@ -215,7 +230,7 @@ public class ElasticSearchQueryUtil {
 		}
 
 		List<MapGeoPoint> polygon = mapBoundParams.getPolygon();
-		if (polygon != null && !polygon.isEmpty()) {
+		if (polygon != null && !polygon.isEmpty() && geoAggregationField != null) {
 			List<GeoPoint> geoPoints = new ArrayList<>();
 			for (MapGeoPoint point : polygon)
 				geoPoints.add(new GeoPoint(point.getLat(), point.getLon()));
@@ -223,6 +238,50 @@ public class ElasticSearchQueryUtil {
 			GeoPolygonQueryBuilder setPolygon = QueryBuilders.geoPolygonQuery(geoAggregationField, geoPoints);
 			masterBoolQuery.filter(setPolygon);
 		}
+	}
+
+	protected void applyShapeFilter(MapSearchParams searchParams, BoolQueryBuilder masterBoolQuery,
+			String geoShapeFilterField) throws IOException {
+
+		MapBoundParams mapBoundParams = searchParams.getMapBoundParams();
+		if (mapBoundParams == null)
+			return;
+
+		List<MapGeoPoint> polygon = mapBoundParams.getPolygon();
+		List<List<MapGeoPoint>> multipolygon = mapBoundParams.getMultipolygon();
+
+		if (polygon != null && !polygon.isEmpty()) {
+			applyGeoPolygonQuery(polygon, masterBoolQuery, geoShapeFilterField);
+		} else if (multipolygon != null && !multipolygon.isEmpty()) {
+			applyMultiPolygonQuery(multipolygon, masterBoolQuery, geoShapeFilterField);
+		}
+	}
+
+	protected void applyGeoPolygonQuery(List<MapGeoPoint> polygon, BoolQueryBuilder masterBoolQuery,
+			String geoShapeFilterField) throws IOException {
+		CoordinatesBuilder cb = new CoordinatesBuilder();
+
+		polygon.forEach(i -> {
+			cb.coordinate(i.getLon(), i.getLat());
+		});
+		Geometry polygonSet = new PolygonBuilder(cb).buildGeometry();
+		GeoShapeQueryBuilder qb = QueryBuilders.geoShapeQuery(geoShapeFilterField, polygonSet);
+		masterBoolQuery.minimumShouldMatch(1);
+		masterBoolQuery.should(qb);
+
+	}
+
+	protected void applyMultiPolygonQuery(List<List<MapGeoPoint>> multipolygon, BoolQueryBuilder masterBoolQuery,
+			String geoShapeFilterField) throws IOException {
+
+		multipolygon.forEach(item -> {
+			try {
+				applyGeoPolygonQuery(item, masterBoolQuery, geoShapeFilterField);
+
+			} catch (IOException e) {
+				logger.error(e.getMessage());
+			}
+		});
 	}
 
 	protected void applyMapBounds(MapBounds bounds, BoolQueryBuilder masterBoolQuery, String geoAggregationField) {
@@ -233,4 +292,5 @@ public class ElasticSearchQueryUtil {
 			masterBoolQuery.filter(setCorners);
 		}
 	}
+
 }

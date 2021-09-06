@@ -4,7 +4,7 @@ import java.util.Collection;
 
 public class Geojson {
 
-	private final String type = "FeatureCollection";
+	private static final String type = "FeatureCollection";
 
 	private Collection<Feature> features;
 

@@ -1,13 +1,14 @@
 package com.strandls.esmodule.indexes.pojo;
 
 import java.util.List;
+import java.util.Map;
 
 public class ExtendedTaxonDefinition implements ElasticIndexes {
 
 	private Integer parent_taxon_definition_id;
 	private String group_name;
 	private List<Integer> accepted_ids;
-	private String hierarchy;
+	private List<Map<String,String>> hierarchy;
 	private String italicised_form;
 	private Integer species_id;
 	private String species_title;
@@ -17,7 +18,7 @@ public class ExtendedTaxonDefinition implements ElasticIndexes {
 	private Float group_id;
 	private String name;
 	private List<CommonName> common_names;
-	private Integer rank;
+	private String rank;
 	private Integer id;
 	private String position;
 	private String lowercase_match_name;
@@ -29,11 +30,33 @@ public class ExtendedTaxonDefinition implements ElasticIndexes {
 		super();
 	}
 
+	/**
+	 * @param parent_taxon_definition_id
+	 * @param group_name
+	 * @param accepted_ids
+	 * @param hierarchy
+	 * @param italicised_form
+	 * @param species_id
+	 * @param species_title
+	 * @param path
+	 * @param repr_image_id
+	 * @param repr_image_url
+	 * @param group_id
+	 * @param name
+	 * @param common_names
+	 * @param rank
+	 * @param id
+	 * @param position
+	 * @param lowercase_match_name
+	 * @param canonical_form
+	 * @param status
+	 * @param accepted_names
+	 */
 	public ExtendedTaxonDefinition(Integer parent_taxon_definition_id, String group_name, List<Integer> accepted_ids,
-			String hierarchy, String italicised_form, Integer species_id, String species_title, String path,
+			List<Map<String,String>> hierarchy, String italicised_form, Integer species_id, String species_title, String path,
 			String repr_image_id, String repr_image_url, Float group_id, String name, List<CommonName> common_names,
-			Integer rank, Integer id, String position, String lowercase_match_name, String canonical_form,
-			String status, List<String> accepted_names) {
+			String rank, Integer id, String position, String lowercase_match_name, String canonical_form, String status,
+			List<String> accepted_names) {
 		super();
 		this.parent_taxon_definition_id = parent_taxon_definition_id;
 		this.group_name = group_name;
@@ -81,11 +104,11 @@ public class ExtendedTaxonDefinition implements ElasticIndexes {
 		this.accepted_ids = accepted_ids;
 	}
 
-	public String getHierarchy() {
+	public List<Map<String,String>> getHierarchy() {
 		return hierarchy;
 	}
 
-	public void setHierarchy(String hierarchy) {
+	public void setHierarchy(List<Map<String,String>> hierarchy) {
 		this.hierarchy = hierarchy;
 	}
 
@@ -161,11 +184,11 @@ public class ExtendedTaxonDefinition implements ElasticIndexes {
 		this.common_names = common_names;
 	}
 
-	public Integer getRank() {
+	public String getRank() {
 		return rank;
 	}
 
-	public void setRank(Integer rank) {
+	public void setRank(String rank) {
 		this.rank = rank;
 	}
 
