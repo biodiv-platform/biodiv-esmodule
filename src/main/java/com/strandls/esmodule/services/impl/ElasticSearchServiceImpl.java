@@ -1453,7 +1453,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			AggregationBuilder userGroupAgregation = AggregationBuilders.terms("userGroup")
 					.field("user_group_observations.ug_filter.keyword").size(100).order(BucketOrder.count(false));
 			AggregationBuilder stateAggregation = AggregationBuilders.terms("state")
-					.field("location_information.state.keyword").size(100).order(BucketOrder.key(true));
+					.field("location_information.state.raw").size(100).order(BucketOrder.key(true));
 			AggregationBuilder traitAggregation = AggregationBuilders.terms("trait")
 					.field("facts.trait_value.trait_filter.keyword").size(1000).order(BucketOrder.key(true));
 			AggregationBuilder cfAggregation = AggregationBuilders.terms("customField")
