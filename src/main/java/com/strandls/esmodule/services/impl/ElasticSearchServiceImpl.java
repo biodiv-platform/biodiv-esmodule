@@ -543,17 +543,16 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	@Override
 	public AggregationResponse aggregation(String index, String type, MapSearchQuery searchQuery,
-			String geoAggregationField, String filter,String geoShapeFilterField) throws IOException {
+			String geoAggregationField, String filter, String geoShapeFilterField) throws IOException {
 		String indexParam = index.replaceAll("[\n\r\t]", "_");
 		String typeParam = type.replaceAll("[\n\r\t]", "_");
 		logger.info("SEARCH for index: {}, type: {}", indexParam, typeParam);
-	
 
 		MapSearchParams searchParams = searchQuery.getSearchParams();
 		BoolQueryBuilder masterBoolQuery = getBoolQueryBuilder(searchQuery);
 
 		applyMapBounds(searchParams, masterBoolQuery, geoAggregationField);
-		
+
 		if (geoShapeFilterField != null) {
 			applyShapeFilter(searchParams, masterBoolQuery, geoShapeFilterField);
 		}
@@ -723,7 +722,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		if (geoShapeFilterField != null) {
 			applyShapeFilter(searchParams, masterBoolQuery, geoShapeFilterField);
 		}
-		MapResponse mapResponse = querySearch(index,masterBoolQuery, searchParams, geoAggregationField,
+		MapResponse mapResponse = querySearch(index, masterBoolQuery, searchParams, geoAggregationField,
 				geoAggegationPrecision);
 		mapResponse.setViewFilteredGeohashAggregation(mapResponse.getGeohashAggregation());
 		mapResponse.setGeohashAggregation(geohashAggregation);
@@ -1453,7 +1452,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			AggregationBuilder userGroupAgregation = AggregationBuilders.terms("userGroup")
 					.field("user_group_observations.ug_filter.keyword").size(100).order(BucketOrder.count(false));
 			AggregationBuilder stateAggregation = AggregationBuilders.terms("state")
-					.field("location_information.state.raw").size(100).order(BucketOrder.key(true));
+					.field("location_information.state.keyword").size(100).order(BucketOrder.key(true));
 			AggregationBuilder traitAggregation = AggregationBuilders.terms("trait")
 					.field("facts.trait_value.trait_filter.keyword").size(1000).order(BucketOrder.key(true));
 			AggregationBuilder cfAggregation = AggregationBuilders.terms("customField")
@@ -1641,7 +1640,6 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		return new ArrayList<>();
 	}
 
-	
 	@SuppressWarnings("unchecked")
 	@Override
 	public String fetchIndex() {
