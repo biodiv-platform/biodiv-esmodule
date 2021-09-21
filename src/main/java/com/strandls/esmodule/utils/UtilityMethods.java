@@ -24,6 +24,8 @@ public class UtilityMethods {
 		esIndexConstants.put("eo","extended_observation");
 		esIndexConstants.put("eaf","extended_activity_feed");
 		esIndexConstants.put("ed","document");
+		esIndexConstants.put("eu","extended_user");
+		
 		
 		
 		esIndexTypeConstant.put("er","_doc");
