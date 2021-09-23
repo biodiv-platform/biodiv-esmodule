@@ -27,7 +27,6 @@ public class UtilityMethods {
 		esIndexConstants.put("eu","extended_user");
 		
 		
-		
 		esIndexTypeConstant.put("er","_doc");
 	}
 
