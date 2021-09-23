@@ -1159,7 +1159,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			String field = filterOn;
 			searchSourceBuilder.fetchSource(field, null);
 			searchSourceBuilder.size(15);
-			QueryBuilder queryBuilder = QueryBuilders.matchPhrasePrefixQuery(field, text);
+			QueryBuilder queryBuilder =  field.contentEquals("user.mobileNumber")?QueryBuilders.matchPhraseQuery(field, text): QueryBuilders.matchPhrasePrefixQuery(field, text);
 			searchSourceBuilder.query(queryBuilder);
 			searchRequest.source(searchSourceBuilder);
 			try {
