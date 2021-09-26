@@ -63,6 +63,7 @@ import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGrid;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGridAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.geogrid.ParsedGeoHashGrid;
 import org.elasticsearch.search.aggregations.bucket.missing.Missing;
+import org.elasticsearch.search.aggregations.bucket.nested.Nested;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms.Bucket;
 import org.elasticsearch.search.aggregations.pipeline.BucketScriptPipelineAggregationBuilder;
@@ -557,12 +558,17 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			applyShapeFilter(searchParams, masterBoolQuery, geoShapeFilterField);
 		}
 
-		AggregationBuilder aggregation;
+		AggregationBuilder aggregation = null;
 
 		if (filter.equals(Constants.MVR_SCIENTIFIC_NAME)) {
 			aggregation = AggregationBuilders.terms(filter).field(filter).size(50000);
 		} else if (filter.equals(Constants.AUTHOR_ID) || filter.equals(Constants.IDENTIFIER_ID)) {
 			aggregation = AggregationBuilders.terms(filter).field(filter).size(20000).order(BucketOrder.count(false));
+		} else if (filter.contains("nested")) {
+			String nestedFiled = filter.split("\\.")[1];
+			String nestedFilter = filter.replace("nested.", "");
+			aggregation = AggregationBuilders.nested(nestedFiled, nestedFiled)
+					.subAggregation(AggregationBuilders.terms(nestedFilter).field(nestedFilter).size(1000));
 		} else {
 			aggregation = AggregationBuilders.terms(filter).field(filter).size(1000);
 		}
@@ -844,7 +850,14 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				groupMonth.put("missing", missingAgg.getDocCount());
 			}
 
-		} else {
+		} else if (filter.contains("nested")) {
+			String nestedFiled = filter.split("\\.")[1];
+			Nested nestedResponse = response.getAggregations().get(nestedFiled);
+			Terms termResp = nestedResponse.getAggregations().get(filter.replace("nested.", ""));
+			for (Terms.Bucket entry : termResp.getBuckets()) {
+				groupMonth.put(entry.getKey(), entry.getDocCount());
+			}
+		}else {
 			Terms frommonth = response.getAggregations().get(filter);
 
 			for (Terms.Bucket entry : frommonth.getBuckets()) {
@@ -1159,7 +1172,9 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			String field = filterOn;
 			searchSourceBuilder.fetchSource(field, null);
 			searchSourceBuilder.size(15);
-			QueryBuilder queryBuilder =  field.contentEquals("user.mobileNumber")?QueryBuilders.matchPhraseQuery(field, text): QueryBuilders.matchPhrasePrefixQuery(field, text);
+			QueryBuilder queryBuilder = field.contentEquals("user.mobileNumber")
+					? QueryBuilders.matchPhraseQuery(field, text)
+					: QueryBuilders.matchPhrasePrefixQuery(field, text);
 			searchSourceBuilder.query(queryBuilder);
 			searchRequest.source(searchSourceBuilder);
 			try {
