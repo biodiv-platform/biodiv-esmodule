@@ -3,10 +3,12 @@ package com.strandls.esmodule.services.impl;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
 
 import org.apache.lucene.search.join.ScoreMode;
 import org.elasticsearch.common.geo.GeoPoint;
-import org.elasticsearch.common.geo.ShapeRelation;
 import org.elasticsearch.common.geo.builders.CoordinatesBuilder;
 import org.elasticsearch.common.geo.builders.PolygonBuilder;
 import org.elasticsearch.geometry.Geometry;
@@ -79,11 +81,19 @@ public class ElasticSearchQueryUtil {
 	private void buildBoolQueries(List<MapAndBoolQuery> andQueries, List<MapOrBoolQuery> orQueries,
 			BoolQueryBuilder masterBoolQuery) {
 
-		BoolQueryBuilder boolQuery;
+		BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+
+		List<MapAndBoolQuery> nonNestedAnd = andQueries.stream()
+				.filter(p -> (p.getPath() == null || p.getPath().isEmpty())).collect(Collectors.toList());
+
+		List<MapAndBoolQuery> nestedAnd = andQueries.stream()
+				.filter(p -> (p.getPath() != null && !p.getPath().isEmpty())).collect(Collectors.toList());
+
+		buildNestedBoolAndQuery(nestedAnd, masterBoolQuery);
 
 		if (andQueries != null) {
 			boolQuery = QueryBuilders.boolQuery();
-			for (MapBoolQuery query : andQueries) {
+			for (MapBoolQuery query : nonNestedAnd) {
 				if (query.getValues() != null)
 					boolQuery.must(getTermsQueryBuilder(query));
 				else
@@ -92,15 +102,61 @@ public class ElasticSearchQueryUtil {
 			masterBoolQuery.must(boolQuery);
 		}
 
+		List<MapOrBoolQuery> nonNestedOrList = orQueries.stream()
+				.filter(p -> (p.getPath() == null || p.getPath().isEmpty())).collect(Collectors.toList());
+
+		List<MapOrBoolQuery> nestedOrList = orQueries.stream()
+				.filter(p -> (p.getPath() != null && !p.getPath().isEmpty())).collect(Collectors.toList());
+
+		buildNestedBoolOrQuery(nestedOrList, masterBoolQuery);
+
 		if (orQueries != null) {
 			boolQuery = QueryBuilders.boolQuery();
-			for (MapBoolQuery query : orQueries) {
+			for (MapBoolQuery query : nonNestedOrList) {
 				if (query.getValues() != null)
 					boolQuery.should(getTermsQueryBuilder(query));
 				else
 					boolQuery.mustNot(getExistsQueryBuilder(query));
 			}
 			masterBoolQuery.must(boolQuery);
+		}
+	}
+
+	private void buildNestedBoolAndQuery(List<MapAndBoolQuery> nestedAnd, BoolQueryBuilder masterBoolQery) {
+
+		Map<String, List<MapAndBoolQuery>> nestedGroupAndByList = nestedAnd.stream()
+				.collect(Collectors.groupingBy(w -> w.getPath()));
+
+		for (Entry<String, List<MapAndBoolQuery>> item : nestedGroupAndByList.entrySet()) {
+			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
+			String nestedPath = item.getKey();
+			item.getValue().forEach(qry -> {
+				qry.setPath(null);
+				if (qry.getValues() != null)
+					nestedBoolQuery.must(getTermsQueryBuilder(qry));
+				else
+					nestedBoolQuery.mustNot(getExistsQueryBuilder(qry));
+			});
+			masterBoolQery.must(QueryBuilders.nestedQuery(nestedPath, nestedBoolQuery, ScoreMode.None));
+		}
+	}
+
+	private void buildNestedBoolOrQuery(List<MapOrBoolQuery> nestedOr, BoolQueryBuilder masterBoolQery) {
+
+		Map<String, List<MapOrBoolQuery>> nestedGroupAndByList = nestedOr.stream()
+				.collect(Collectors.groupingBy(w -> w.getPath()));
+
+		for (Entry<String, List<MapOrBoolQuery>> item : nestedGroupAndByList.entrySet()) {
+			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
+			String nestedPath = item.getKey();
+			item.getValue().forEach(qry -> {
+				qry.setPath(null);
+				if (qry.getValues() != null)
+					nestedBoolQuery.should(getTermsQueryBuilder(qry));
+				else
+					nestedBoolQuery.mustNot(getExistsQueryBuilder(qry));
+			});
+			masterBoolQery.must(QueryBuilders.nestedQuery(nestedPath, nestedBoolQuery, ScoreMode.None));
 		}
 	}
 
