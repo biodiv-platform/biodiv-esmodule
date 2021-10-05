@@ -708,8 +708,8 @@ public class ESController {
 		String timeFilter = null;
 		if (sortingValue.isEmpty())
 			sortingValue = null;
-		else
-			timeFilter = utilityMethods.getTimeWindow(timePeriod);
+
+		timeFilter = utilityMethods.getTimeWindow(timePeriod);
 
 		index = utilityMethods.getEsIndexConstants(index);
 		type = utilityMethods.getEsIndexTypeConstant(type);
