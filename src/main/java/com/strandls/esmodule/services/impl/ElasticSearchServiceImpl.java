@@ -1182,8 +1182,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				String[] resRegex = field.split("\\.");
 				for (SearchHit hit : searchResponse.getHits().getHits()) {
 					Collection<Object> s = hit.getSourceAsMap().values();
-					results.add(
-							s.toString().replaceAll("[\\[\\]{}]", "").replace(resRegex[resRegex.length - 1] + "=", ""));
+					results.add(cleanAutoCompleteResponse(resRegex, s.toString()));
 				}
 
 			} catch (Exception e) {
@@ -1193,6 +1192,15 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		}
 		results = (List<String>) new HashSet(results).stream().sorted().collect(Collectors.toList());
 		return results;
+	}
+
+	private String cleanAutoCompleteResponse(String[] resRegex, String text) {
+		String resp = text;
+		for (String filterString : resRegex) {
+			resp = resp.replace(filterString + "=", "");
+		}
+		return resp.replaceAll("[\\[\\]{}]", "");
+
 	}
 
 	@Override
