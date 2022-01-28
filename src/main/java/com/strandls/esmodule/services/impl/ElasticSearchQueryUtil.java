@@ -2,11 +2,14 @@ package com.strandls.esmodule.services.impl;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.lucene.search.join.ScoreMode;
 import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.geo.builders.CoordinatesBuilder;
@@ -122,6 +125,23 @@ public class ElasticSearchQueryUtil {
 		}
 	}
 
+	private void combinationNestedQuery(BoolQueryBuilder masterBoolQery, BoolQueryBuilder nestedBoolQuery,
+			String nestedPath) {
+		String regex = "(.)*(\\d)(.)*";
+		Pattern pattern = Pattern.compile(regex);//NOSONAR
+		if (StringUtils.isNumeric(nestedPath)) {
+			masterBoolQery.must(nestedBoolQuery);
+		} else {
+			// case nested combination query convert "fieldData.108"->"fieldData"
+			if (pattern.matcher(nestedPath).matches()) {
+				List<String> list = Arrays.asList(nestedPath.split("\\.")).subList(0,
+						(nestedPath.split("\\.").length - 1));
+				nestedPath = String.join(".", list);
+			}
+			masterBoolQery.must(QueryBuilders.nestedQuery(nestedPath, nestedBoolQuery, ScoreMode.None));
+		}
+	}
+
 	private void buildNestedBoolAndQuery(List<MapAndBoolQuery> nestedAnd, BoolQueryBuilder masterBoolQery) {
 
 		Map<String, List<MapAndBoolQuery>> nestedGroupAndByList = nestedAnd.stream()
@@ -129,7 +149,10 @@ public class ElasticSearchQueryUtil {
 
 		for (Entry<String, List<MapAndBoolQuery>> item : nestedGroupAndByList.entrySet()) {
 			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
+
+			// for combination and nested combination queies
 			String nestedPath = item.getKey();
+
 			item.getValue().forEach(qry -> {
 				qry.setPath(null);
 				if (qry.getValues() != null)
@@ -137,7 +160,9 @@ public class ElasticSearchQueryUtil {
 				else
 					nestedBoolQuery.mustNot(getExistsQueryBuilder(qry));
 			});
-			masterBoolQery.must(QueryBuilders.nestedQuery(nestedPath, nestedBoolQuery, ScoreMode.None));
+
+			combinationNestedQuery(masterBoolQery, nestedBoolQuery, nestedPath);
+
 		}
 	}
 
@@ -148,7 +173,10 @@ public class ElasticSearchQueryUtil {
 
 		for (Entry<String, List<MapOrBoolQuery>> item : nestedGroupAndByList.entrySet()) {
 			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
+
+			// for combination and nested combination queies
 			String nestedPath = item.getKey();
+
 			item.getValue().forEach(qry -> {
 				qry.setPath(null);
 				if (qry.getValues() != null)
@@ -156,7 +184,61 @@ public class ElasticSearchQueryUtil {
 				else
 					nestedBoolQuery.mustNot(getExistsQueryBuilder(qry));
 			});
-			masterBoolQery.must(QueryBuilders.nestedQuery(nestedPath, nestedBoolQuery, ScoreMode.None));
+
+			combinationNestedQuery(masterBoolQery, nestedBoolQuery, nestedPath);
+		}
+	}
+
+	// builds nested, combination , nested combination queries based on the path
+	// type
+	// eg. path = "108"[combination query],
+	// eg. path = "fieldData"[nested],
+	// eg. path = "fieldData.108"[nested combination]
+	private void buildNestedMatchPhraseAndQuery(List<MapAndMatchPhraseQuery> nestedAnd,
+			BoolQueryBuilder masterBoolQery) {
+
+		// group by path parameter in nestedAdd query
+		Map<String, List<MapAndMatchPhraseQuery>> nestedGroupAndByList = nestedAnd.stream()
+				.collect(Collectors.groupingBy(w -> w.getPath()));
+
+		// for each path create a combination or nested or nested-combination query
+		for (Entry<String, List<MapAndMatchPhraseQuery>> item : nestedGroupAndByList.entrySet()) {
+			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
+			// for combination and nested combination queies
+			String nestedPath = item.getKey();
+
+			item.getValue().forEach(qry -> {
+				qry.setPath(null);
+				if (qry.getValue() != null)
+					nestedBoolQuery.must(getMatchPhraseQueryBuilder(qry));
+				else
+					nestedBoolQuery.mustNot(getExistsQueryBuilder(qry));
+			});
+
+			combinationNestedQuery(masterBoolQery, nestedBoolQuery, nestedPath);
+		}
+	}
+
+	private void buildNestedMatchPhraseOrQuery(List<MapOrMatchPhraseQuery> nestedor, BoolQueryBuilder masterBoolQery) {
+
+		Map<String, List<MapOrMatchPhraseQuery>> nestedGroupAndByList = nestedor.stream()
+				.collect(Collectors.groupingBy(w -> w.getPath()));
+
+		for (Entry<String, List<MapOrMatchPhraseQuery>> item : nestedGroupAndByList.entrySet()) {
+			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
+
+			// for combination and nested combination queies
+			String nestedPath = item.getKey();
+
+			item.getValue().forEach(qry -> {
+				qry.setPath(null);
+				if (qry.getValue() != null)
+					nestedBoolQuery.should(getMatchPhraseQueryBuilder(qry));
+				else
+					nestedBoolQuery.mustNot(getExistsQueryBuilder(qry));
+			});
+
+			combinationNestedQuery(masterBoolQery, nestedBoolQuery, nestedPath);
 		}
 	}
 
@@ -201,8 +283,17 @@ public class ElasticSearchQueryUtil {
 		BoolQueryBuilder boolQuery;
 
 		if (andQueries != null) {
+
+			List<MapAndMatchPhraseQuery> nonNestedOrList = andQueries.stream()
+					.filter(p -> (p.getPath() == null || p.getPath().isEmpty())).collect(Collectors.toList());
+
+			List<MapAndMatchPhraseQuery> nestedOrList = andQueries.stream()
+					.filter(p -> (p.getPath() != null && !p.getPath().isEmpty())).collect(Collectors.toList());
+
+			buildNestedMatchPhraseAndQuery(nestedOrList, masterBoolQuery);
+
 			boolQuery = QueryBuilders.boolQuery();
-			for (MapAndMatchPhraseQuery query : andQueries) {
+			for (MapAndMatchPhraseQuery query : nonNestedOrList) {
 				if (query.getValue() != null)
 					boolQuery.must(getMatchPhraseQueryBuilder(query));
 				else
@@ -212,8 +303,17 @@ public class ElasticSearchQueryUtil {
 		}
 
 		if (orQueries != null) {
+
+			List<MapOrMatchPhraseQuery> nonNestedOrList = orQueries.stream()
+					.filter(p -> (p.getPath() == null || p.getPath().isEmpty())).collect(Collectors.toList());
+
+			List<MapOrMatchPhraseQuery> nestedOrList = orQueries.stream()
+					.filter(p -> (p.getPath() != null && !p.getPath().isEmpty())).collect(Collectors.toList());
+
+			buildNestedMatchPhraseOrQuery(nestedOrList, masterBoolQuery);
+
 			boolQuery = QueryBuilders.boolQuery();
-			for (MapOrMatchPhraseQuery query : orQueries) {
+			for (MapOrMatchPhraseQuery query : nonNestedOrList) {
 				if (query.getValue() != null)
 					boolQuery.should(getMatchPhraseQueryBuilder(query));
 				else
