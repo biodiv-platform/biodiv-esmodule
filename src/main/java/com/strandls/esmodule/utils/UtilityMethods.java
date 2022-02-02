@@ -125,15 +125,15 @@ public class UtilityMethods {
 
 		indexScores.keySet().removeAll(negativeScoreIndexes);
 
-		List<ExtendedTaxonDefinition> finalRecord = new ArrayList<ExtendedTaxonDefinition>();
-		finalRecord.addAll(records);
-		for (Integer negativeIndex : negativeScoreIndexes) {
-			finalRecord.remove(records.get(negativeIndex.intValue()));
-		}
-
 		LinkedHashMap<Integer, Integer> rankedIndex = sortHashMaponValue(indexScores);
 		ArrayList<Integer> orderedIndexes = new ArrayList<>(rankedIndex.keySet());
-		return orderDocuments(orderedIndexes, finalRecord);
+
+		List<ExtendedTaxonDefinition> finalRecords = new ArrayList<>();
+		for (Integer index : orderedIndexes) {
+			finalRecords.add(records.get(index));
+		}
+	
+		return finalRecords;
 	}
 
 	public final List<ExtendedTaxonDefinition> rankDocumentBasedOnCommonName(List<ExtendedTaxonDefinition> records,
