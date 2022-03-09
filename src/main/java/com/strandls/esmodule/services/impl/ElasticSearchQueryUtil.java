@@ -128,7 +128,7 @@ public class ElasticSearchQueryUtil {
 	private void combinationNestedQuery(BoolQueryBuilder masterBoolQery, BoolQueryBuilder nestedBoolQuery,
 			String nestedPath) {
 		String regex = "(.)*(\\d)(.)*";
-		Pattern pattern = Pattern.compile(regex);//NOSONAR
+		Pattern pattern = Pattern.compile(regex);// NOSONAR
 		if (StringUtils.isNumeric(nestedPath)) {
 			masterBoolQery.must(nestedBoolQuery);
 		} else {
@@ -183,6 +183,68 @@ public class ElasticSearchQueryUtil {
 					nestedBoolQuery.should(getTermsQueryBuilder(qry));
 				else
 					nestedBoolQuery.mustNot(getExistsQueryBuilder(qry));
+			});
+
+			combinationNestedQuery(masterBoolQery, nestedBoolQuery, nestedPath);
+		}
+	}
+
+	private void buildNestedRangeAndQuery(List<MapAndRangeQuery> nestedRangeand, BoolQueryBuilder masterBoolQery) {
+
+		Map<String, List<MapAndRangeQuery>> nestedGroupAndByList = nestedRangeand.stream()
+				.collect(Collectors.groupingBy(w -> w.getPath()));
+
+		for (Entry<String, List<MapAndRangeQuery>> item : nestedGroupAndByList.entrySet()) {
+			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
+
+			// for combination and nested combination queies
+			String nestedPath = item.getKey();
+
+			item.getValue().forEach(qry -> {
+				qry.setPath(null);
+				if (qry.getEnd() == null && qry.getStart() != null) {
+					MapAndBoolQuery boolqry = new MapAndBoolQuery();
+					List<Object> list = new ArrayList<>();
+					list.add(qry.getStart());
+					boolqry.setKey(qry.getKey());
+					boolqry.setValues(list);
+					nestedBoolQuery.must(getTermsQueryBuilder(boolqry));
+
+				} else {
+					nestedBoolQuery.must(getRangeQueryBuilder(qry));
+				}
+
+			});
+
+			combinationNestedQuery(masterBoolQery, nestedBoolQuery, nestedPath);
+		}
+	}
+
+	private void buildNestedRangeOrQuery(List<MapOrRangeQuery> nestedRangeOr, BoolQueryBuilder masterBoolQery) {
+
+		Map<String, List<MapOrRangeQuery>> nestedGroupOrByList = nestedRangeOr.stream()
+				.collect(Collectors.groupingBy(w -> w.getPath()));
+
+		for (Entry<String, List<MapOrRangeQuery>> item : nestedGroupOrByList.entrySet()) {
+			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
+
+			// for combination and nested combination queies
+			String nestedPath = item.getKey();
+
+			item.getValue().forEach(qry -> {
+				qry.setPath(null);
+				if (qry.getEnd() == null && qry.getStart() != null) {
+					MapAndBoolQuery boolqry = new MapAndBoolQuery();
+					List<Object> list = new ArrayList<>();
+					list.add(qry.getStart());
+					boolqry.setKey(qry.getKey());
+					boolqry.setValues(list);
+					nestedBoolQuery.should(getTermsQueryBuilder(boolqry));
+
+				} else {
+					nestedBoolQuery.should(getRangeQueryBuilder(qry));
+				}
+
 			});
 
 			combinationNestedQuery(masterBoolQery, nestedBoolQuery, nestedPath);
@@ -248,19 +310,40 @@ public class ElasticSearchQueryUtil {
 		BoolQueryBuilder boolQuery;
 
 		if (andQueries != null) {
+
+			List<MapAndRangeQuery> nonNestedOrList = andQueries.stream()
+					.filter(p -> (p.getPath() == null || p.getPath().isEmpty())).collect(Collectors.toList());
+
+			List<MapAndRangeQuery> nestedOrList = andQueries.stream()
+					.filter(p -> (p.getPath() != null && !p.getPath().isEmpty())).collect(Collectors.toList());
+
+			buildNestedRangeAndQuery(nestedOrList, masterBoolQuery);
+
 			boolQuery = QueryBuilders.boolQuery();
-			for (MapAndRangeQuery query : andQueries) {
-				boolQuery.must(getRangeQueryBuilder(query));
+			for (MapAndRangeQuery query : nonNestedOrList) {
+				if (query.getStart() != null && query.getEnd() != null)
+					boolQuery.must(getRangeQueryBuilder(query));
 			}
 			masterBoolQuery.must(boolQuery);
 		}
 
 		if (orQueries != null) {
+
+			List<MapOrRangeQuery> nonNestedOrList = orQueries.stream()
+					.filter(p -> (p.getPath() == null || p.getPath().isEmpty())).collect(Collectors.toList());
+
+			List<MapOrRangeQuery> nestedOrList = orQueries.stream()
+					.filter(p -> (p.getPath() != null && !p.getPath().isEmpty())).collect(Collectors.toList());
+
+			buildNestedRangeOrQuery(nestedOrList, masterBoolQuery);
+
 			boolQuery = QueryBuilders.boolQuery();
-			for (MapOrRangeQuery query : orQueries) {
-				boolQuery.should(getRangeQueryBuilder(query));
+			for (MapOrRangeQuery query : nonNestedOrList) {
+				if (query.getStart() != null && query.getEnd() != null)
+					boolQuery.should(getRangeQueryBuilder(query));
 			}
 			masterBoolQuery.must(boolQuery);
+
 		}
 	}
 
