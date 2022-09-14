@@ -1731,7 +1731,6 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				else {
 					if (count > size)
 						break;
-					System.out.println(count);
 					maxVotedRecoFreqs.add(new MaxVotedRecoFreq(Long.parseLong(b.getKeyAsString()), b.getDocCount()));
 					count++;
 				}
