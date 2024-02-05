@@ -742,8 +742,6 @@ public class ESController {
 	public Response autocompleteUserIBP(@PathParam("index") String index, @PathParam("type") String type,
 			@QueryParam("userGroupId") String userGroupId, @QueryParam("searchText") String searchText)
 			throws IOException {
-		index = utilityMethods.getEsIndexConstants(index);
-		type = utilityMethods.getEsIndexTypeConstant(type);
 		MapResponse results = elasticSearchService.autocompleteUserIBP(index, type, userGroupId, searchText);
 		return Response.status(Status.OK).entity(results).build();
 	}
