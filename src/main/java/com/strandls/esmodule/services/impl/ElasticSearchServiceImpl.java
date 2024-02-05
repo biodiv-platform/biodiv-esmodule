@@ -1207,9 +1207,11 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		searchSourceBuilder.size(10);
 		BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
 
-		// Add must_not nested query
-		boolQueryBuilder.mustNot(QueryBuilders.nestedQuery(USERGROUP,
-				new TermQueryBuilder("userGroup.usergroupids", Integer.parseInt(userGroupId)), ScoreMode.None));
+		// Add must_not nested query if userGroupId is provided
+		if (userGroupId != null && !userGroupId.isEmpty()) {
+			boolQueryBuilder.mustNot(QueryBuilders.nestedQuery(USERGROUP,
+					new TermQueryBuilder("userGroup.usergroupids", Integer.parseInt(userGroupId)), ScoreMode.None));
+		}
 		boolQueryBuilder.must(QueryBuilders.matchPhrasePrefixQuery("user.name", searchText));
 
 		searchSourceBuilder.query(boolQueryBuilder);
