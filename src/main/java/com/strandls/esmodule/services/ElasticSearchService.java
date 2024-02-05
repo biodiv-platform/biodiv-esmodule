@@ -218,7 +218,7 @@ public interface ElasticSearchService {
 	 * @return {@link AggregationResponse}
 	 */
 	AggregationResponse aggregation(String index, String type, MapSearchQuery serachQuery, String geoAggregationField,
-			String filter,String geoShapeFilterField) throws IOException;
+			String filter, String geoShapeFilterField) throws IOException;
 
 	/**
 	 * 
@@ -227,7 +227,8 @@ public interface ElasticSearchService {
 	 * @param speciesName the name of SpeciesName
 	 * @return {@link ObservationInfo}
 	 */
-	ObservationInfo getObservationRightPan(String index, String type, String id, Boolean isMaxVotedRecoId) throws IOException;
+	ObservationInfo getObservationRightPan(String index, String type, String id, Boolean isMaxVotedRecoId)
+			throws IOException;
 
 	List<ObservationNearBy> observationNearBy(String index, String type, Double lat, Double lon) throws IOException;
 
@@ -307,10 +308,11 @@ public interface ElasticSearchService {
 
 	public List<ObservationLatLon> getSpeciesCoordinates(String index, String type, String speciesId);
 
-	
-
 	public String fetchIndex();
 
 	public AuthorUploadedObservationInfo getUserData(String index, String type, Long userId, Integer size, Long sGroup,
 			Boolean hasMedia);
+
+	public MapResponse autocompleteUserIBP(String index, String type, String userGroupId, String searchText)
+			throws IOException;
 }

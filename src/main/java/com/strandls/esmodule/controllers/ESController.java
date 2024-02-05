@@ -734,6 +734,21 @@ public class ESController {
 	}
 
 	@GET
+	@Path(ApiConstants.USERIBP + ApiConstants.AUTOCOMPLETE + "/{index}/{type}")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiOperation(value = "Auto complete username", notes = "Returns List of userIbp", response = MapResponse.class)
+	@ApiResponses(value = { @ApiResponse(code = 500, message = "ERROR", response = String.class) })
+	public Response autocompleteUserIBP(@PathParam("index") String index, @PathParam("type") String type,
+			@QueryParam("userGroupId") String userGroupId, @QueryParam("searchText") String searchText)
+			throws IOException {
+		index = utilityMethods.getEsIndexConstants(index);
+		type = utilityMethods.getEsIndexTypeConstant(type);
+		MapResponse results = elasticSearchService.autocompleteUserIBP(index, type, userGroupId, searchText);
+		return Response.status(Status.OK).entity(results).build();
+	}
+
+	@GET
 	@Path(ApiConstants.GETUSERSCORE)
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
