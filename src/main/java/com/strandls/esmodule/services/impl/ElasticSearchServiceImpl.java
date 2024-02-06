@@ -1199,7 +1199,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	}
 
 	@Override
-	public MapResponse autocompleteUserIBP(String index, String type, String userGroupId, String searchText)
+	public MapResponse autocompleteUserIBP(String index, String type, String userGroupId, String name)
 			throws IOException {
 
 		SearchRequest searchRequest = new SearchRequest(index);
@@ -1212,7 +1212,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			boolQueryBuilder.mustNot(QueryBuilders.nestedQuery(USERGROUP,
 					new TermQueryBuilder("userGroup.usergroupids", userGroupId), ScoreMode.None));
 		}
-		boolQueryBuilder.must(QueryBuilders.matchPhrasePrefixQuery("user.name", searchText));
+		boolQueryBuilder.must(QueryBuilders.matchPhrasePrefixQuery("user.name", name));
 
 		searchSourceBuilder.query(boolQueryBuilder);
 		searchRequest.source(searchSourceBuilder);

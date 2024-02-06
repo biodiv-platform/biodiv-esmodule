@@ -313,6 +313,6 @@ public interface ElasticSearchService {
 	public AuthorUploadedObservationInfo getUserData(String index, String type, Long userId, Integer size, Long sGroup,
 			Boolean hasMedia);
 
-	public MapResponse autocompleteUserIBP(String index, String type, String userGroupId, String searchText)
+	public MapResponse autocompleteUserIBP(String index, String type, String userGroupId, String name)
 			throws IOException;
 }

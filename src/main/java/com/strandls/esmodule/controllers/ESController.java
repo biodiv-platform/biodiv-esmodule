@@ -740,9 +740,9 @@ public class ESController {
 	@ApiOperation(value = "Auto complete username", notes = "Returns List of userIbp", response = MapResponse.class)
 	@ApiResponses(value = { @ApiResponse(code = 500, message = "ERROR", response = String.class) })
 	public Response autocompleteUserIBP(@PathParam("index") String index, @PathParam("type") String type,
-			@QueryParam("userGroupId") String userGroupId, @QueryParam("searchText") String searchText)
+			@QueryParam("userGroupId") String userGroupId, @QueryParam("name") String name)
 			throws IOException {
-		MapResponse results = elasticSearchService.autocompleteUserIBP(index, type, userGroupId, searchText);
+		MapResponse results = elasticSearchService.autocompleteUserIBP(index, type, userGroupId, name);
 		return Response.status(Status.OK).entity(results).build();
 	}
 
