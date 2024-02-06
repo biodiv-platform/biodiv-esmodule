@@ -1210,7 +1210,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		// Add must_not nested query if userGroupId is provided
 		if (userGroupId != null && !userGroupId.isEmpty()) {
 			boolQueryBuilder.mustNot(QueryBuilders.nestedQuery(USERGROUP,
-					new TermQueryBuilder("userGroup.usergroupids", Integer.parseInt(userGroupId)), ScoreMode.None));
+					new TermQueryBuilder("userGroup.usergroupids", userGroupId), ScoreMode.None));
 		}
 		boolQueryBuilder.must(QueryBuilders.matchPhrasePrefixQuery("user.name", searchText));
 
