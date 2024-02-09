@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 
+import org.apache.lucene.search.join.ScoreMode;
 import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkResponse;
@@ -50,6 +51,7 @@ import org.elasticsearch.index.query.Operator;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.query.RangeQueryBuilder;
+import org.elasticsearch.index.query.TermQueryBuilder;
 import org.elasticsearch.script.Script;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.aggregations.Aggregation;
@@ -139,6 +141,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	private final Logger logger = LoggerFactory.getLogger(ElasticSearchServiceImpl.class);
 
 	private static final Integer TOTAL_USER_UPPER_BOUND = 20000;
+
+	private static final String USERGROUP = "userGroup";
 
 	/*
 	 * (non-Javadoc)
@@ -857,7 +861,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			for (Terms.Bucket entry : termResp.getBuckets()) {
 				groupMonth.put(entry.getKey(), entry.getDocCount());
 			}
-		}else {
+		} else {
 			Terms frommonth = response.getAggregations().get(filter);
 
 			for (Terms.Bucket entry : frommonth.getBuckets()) {
@@ -1194,6 +1198,38 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		return results;
 	}
 
+	@Override
+	public MapResponse autocompleteUserIBP(String index, String type, String userGroupId, String name)
+			throws IOException {
+
+		SearchRequest searchRequest = new SearchRequest(index);
+		SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+		searchSourceBuilder.size(10);
+		BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+
+		// Add must_not nested query if userGroupId is provided
+		if (userGroupId != null && !userGroupId.isEmpty()) {
+			boolQueryBuilder.mustNot(QueryBuilders.nestedQuery(USERGROUP,
+					new TermQueryBuilder("userGroup.usergroupids", userGroupId), ScoreMode.None));
+		}
+		boolQueryBuilder.must(QueryBuilders.matchPhrasePrefixQuery("user.name", name));
+
+		searchSourceBuilder.query(boolQueryBuilder);
+		searchRequest.source(searchSourceBuilder);
+
+		SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+		List<MapDocument> result = new ArrayList<>();
+
+		for (SearchHit hit : searchResponse.getHits().getHits()) {
+			result.add(new MapDocument(hit.getSourceAsString()));
+		}
+
+		long totalHits = searchResponse.getHits().getTotalHits().value;
+
+		return new MapResponse(result, totalHits, null);
+
+	}
+
 	private String cleanAutoCompleteResponse(String[] resRegex, String text) {
 		String resp = text;
 		for (String filterString : resRegex) {
@@ -1472,7 +1508,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 			AggregationBuilder speciesGroupAggregation = AggregationBuilders.terms("speciesGroup")
 					.field("sgroup_filter.keyword").size(100).order(BucketOrder.key(true));
-			AggregationBuilder userGroupAgregation = AggregationBuilders.terms("userGroup")
+			AggregationBuilder userGroupAgregation = AggregationBuilders.terms(USERGROUP)
 					.field("user_group_observations.ug_filter.keyword").size(100).order(BucketOrder.count(false));
 			AggregationBuilder stateAggregation = AggregationBuilders.terms("state")
 					.field("location_information.state.keyword").size(100).order(BucketOrder.key(true));
@@ -1497,7 +1533,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 			filterPanel.setSpeciesGroup(getAggregationSpeciesGroup(response.getAggregations().get("speciesGroup")));
 			filterPanel.setStates(getAggregationList(response.getAggregations().get("state")));
-			filterPanel.setUserGroup(getAggregationUserGroup(response.getAggregations().get("userGroup")));
+			filterPanel.setUserGroup(getAggregationUserGroup(response.getAggregations().get(USERGROUP)));
 			filterPanel.setTraits(getTraits(response.getAggregations().get("trait")));
 			filterPanel.setCustomFields(getCustomFields(response.getAggregations().get("customField")));
 			return filterPanel;
