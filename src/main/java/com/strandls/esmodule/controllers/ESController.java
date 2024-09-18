@@ -389,6 +389,28 @@ public class ESController {
 		}
 	}
 
+	@GET
+	@Path(ApiConstants.AGGREGATION + "/{filter}")
+	@Produces(MediaType.APPLICATION_JSON)
+
+	@ApiOperation(value = "Aggregation for List Page", notes = "Returns Aggregated values", response = Map.class)
+	@ApiResponses(value = {
+			@ApiResponse(code = 400, message = "Location field not specified for bounds", response = String.class),
+			@ApiResponse(code = 500, message = "ERROR", response = String.class) })
+
+	public Response getAggregationPerDay(@PathParam("filter") String filter){
+
+		Map<String, List<Map<String, Object>>> response = null;
+		
+		try {
+			response=elasticSearchService.aggregationByDay(filter);
+			return Response.status(Status.OK).entity(response).build();
+		} catch (Exception e) {
+			throw new WebApplicationException(
+					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
+		}
+	}
+
 	@POST
 	@Path(ApiConstants.AGGREGATION + "/{index}/{type}/{filter}")
 	@Consumes(MediaType.APPLICATION_JSON)

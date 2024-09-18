@@ -212,6 +212,13 @@ public interface ElasticSearchService {
 
 	/**
 	 * 
+	 * @param filter       the index in which to search
+	 * @return {@link String}
+	 */
+	Map<String, List<Map<String, Object>>> aggregationByDay(String filter) throws IOException;
+
+	/**
+	 * 
 	 * @param index       the index in which to search
 	 * @param type        the type in which to search
 	 * @param serachQuery optional
