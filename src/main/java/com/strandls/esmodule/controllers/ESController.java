@@ -411,6 +411,28 @@ public class ESController {
 		}
 	}
 
+	@GET
+	@Path(ApiConstants.MONTH_AGGREGATION + "/{user}")
+	@Produces(MediaType.APPLICATION_JSON)
+
+	@ApiOperation(value = "Aggregation for List Page", notes = "Returns Aggregated values", response = List.class)
+	@ApiResponses(value = {
+			@ApiResponse(code = 400, message = "Location field not specified for bounds", response = String.class),
+			@ApiResponse(code = 500, message = "ERROR", response = String.class) })
+
+	public Response getAggregationPerMonth(@PathParam("user") String user){
+
+		List<Map<String, Object>> response = null;
+		
+		try {
+			response=elasticSearchService.aggregationByMonth(user);
+			return Response.status(Status.OK).entity(response).build();
+		} catch (Exception e) {
+			throw new WebApplicationException(
+					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
+		}
+	}
+
 	@POST
 	@Path(ApiConstants.AGGREGATION + "/{index}/{type}/{filter}")
 	@Consumes(MediaType.APPLICATION_JSON)

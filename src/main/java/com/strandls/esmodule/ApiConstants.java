@@ -26,6 +26,7 @@ public class ApiConstants {
 	public static final String GEOHASH_AGGREGATION = "/geohash-aggregation";
 	public static final String TERMS_AGGREGATION = "/terms-aggregation";
 	public static final String AGGREGATION = "/aggregation";
+	public static final String MONTH_AGGREGATION = "/month-aggregation";
 	public static final String BOUNDS = "/bounds";
 	public static final String SEARCH = "/search";
 	public static final String DOWNLOAD = "/download";
