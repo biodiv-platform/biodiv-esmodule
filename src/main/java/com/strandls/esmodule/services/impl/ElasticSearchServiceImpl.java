@@ -655,7 +655,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		} else if (filter.equals(Constants.GROUP_BY_DAY)) {
 			aggregation = AggregationBuilders.dateHistogram("agg").field("created_on").dateHistogramInterval(DateHistogramInterval.days(1)).format("yyyy-MM-dd");
 		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
-			aggregation = AggregationBuilders.dateHistogram("agg").field("from_date").dateHistogramInterval(DateHistogramInterval.MONTH).format("yyyy-MMM");
+			aggregation = AggregationBuilders.dateHistogram("agg").field("from_date").dateHistogramInterval(DateHistogramInterval.MONTH).format("yyyy-MMM").minDocCount(1);
 		}
 		else {
 			aggregation = AggregationBuilders.terms(filter).field(filter).size(1000);
