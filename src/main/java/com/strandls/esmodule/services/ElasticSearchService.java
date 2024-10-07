@@ -222,7 +222,7 @@ public interface ElasticSearchService {
 	 * @param user       the index in which to search
 	 * @return {@link Map}
 	 */
-	List<Map<String, Object>> aggregationByMonth(String user) throws IOException;
+	Map<String, List<Map<String, Object>>> aggregationByMonth(String user) throws IOException;
 
 	/**
 	 * 

@@ -592,7 +592,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	}
 
 	@Override
-	public List<Map<String, Object>> aggregationByMonth(String user) throws IOException {
+	public Map<String, List<Map<String, Object>>> aggregationByMonth(String user) throws IOException {
 
 		BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
 		TermQueryBuilder authorFilter = QueryBuilders.termQuery("author_id", user);
@@ -611,18 +611,31 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		SearchRequest request = new SearchRequest("extended_observation");
 		request.source(sourceBuilder);
 		SearchResponse response = client.search(request, RequestOptions.DEFAULT);
-		List<Map<String, Object>> groupbymonth= new ArrayList();
 		Histogram dateHistogram = response.getAggregations().get("agg");
+		Histogram.Bucket lastBucket = dateHistogram.getBuckets().get(dateHistogram.getBuckets().size() - 1);
+		Map<String, List<Map<String, Object>>> groupByMonth= new LinkedHashMap<>();
+		String currentYear = lastBucket.getKeyAsString().substring(0,4);
 
 		for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
+			String year = entry.getKeyAsString().substring(0,4);
+			Integer intervaldiff= Integer.parseInt(currentYear)-Integer.parseInt(year);
+			Integer intervalId = intervaldiff/50;
+			String intervalKey = String.format("%04d",Math.max( Integer.parseInt(currentYear)-((intervalId+1)*50),0)) + "-" + String.format("%04d",Integer.parseInt(currentYear)-(intervalId*50));
+			List<Map<String, Object>> intervaldata;
+			if(groupByMonth.containsKey(intervalKey)) {
+				intervaldata = groupByMonth.get(intervalKey);
+			} else {
+				intervaldata = new ArrayList<>();
+			}
 			Map<String, Object> data = new HashMap<>();
         	data.put("month", entry.getKeyAsString().substring(5,8));
 			data.put("year", entry.getKeyAsString().substring(0,4));
         	data.put("value", entry.getDocCount());
-        	groupbymonth.add(data);
+        	intervaldata.add(data);
+        	groupByMonth.put(intervalKey, intervaldata);
 		}
 
-		return groupbymonth;
+		return groupByMonth;
 	}
 
 	@Override
