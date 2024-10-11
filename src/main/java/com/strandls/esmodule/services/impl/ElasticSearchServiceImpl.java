@@ -550,41 +550,42 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	}
 
 	@Override
-	public Map<String, List<Map<String, Object>>> aggregationByDay(String filter) throws IOException {
+	public Map<String, List<Map<String, Object>>> aggregationByDay(String index, String user) throws IOException {
 
 		BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
-		TermQueryBuilder authorFilter = QueryBuilders.termQuery("author_id", filter);
-        boolQuery.filter(authorFilter);
+		TermQueryBuilder authorFilter = QueryBuilders.termQuery("author_id", user);
+		boolQuery.filter(authorFilter);
 		AggregationBuilder aggregation = null;
-		aggregation = AggregationBuilders.dateHistogram("agg").field("created_on").dateHistogramInterval(DateHistogramInterval.days(1)).format("yyyy-MM-dd");
+		aggregation = AggregationBuilders.dateHistogram(Constants.AGG).field("created_on")
+				.calendarInterval(DateHistogramInterval.days(1)).format("yyyy-MM-dd");
 		AggregationResponse aggregationResponse = new AggregationResponse();
 		if (aggregation == null)
-				return null;
+			return null;
 
 		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
 		if (boolQuery != null)
 			sourceBuilder.query(boolQuery);
 		sourceBuilder.aggregation(aggregation);
 
-		SearchRequest request = new SearchRequest("extended_observation");
+		SearchRequest request = new SearchRequest(index);
 		request.source(sourceBuilder);
 		SearchResponse response = client.search(request, RequestOptions.DEFAULT);
-		Map<String,List<Map<String, Object>>> groupbyday= new LinkedHashMap <String,List<Map<String, Object>>>();
+		Map<String, List<Map<String, Object>>> groupbyday = new LinkedHashMap<String, List<Map<String, Object>>>();
 		Histogram dateHistogram = response.getAggregations().get("agg");
 
 		for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
-			String year = entry.getKeyAsString().substring(0,4);
+			String year = entry.getKeyAsString().substring(0, 4);
 			List<Map<String, Object>> yeardata;
-			if(groupbyday.containsKey(year)) {
+			if (groupbyday.containsKey(year)) {
 				yeardata = groupbyday.get(year);
 			} else {
 				yeardata = new ArrayList<>();
 			}
 
 			Map<String, Object> data = new HashMap<>();
-        	data.put("date", entry.getKeyAsString());  
-        	data.put("value", entry.getDocCount());
-        	yeardata.add(data);
+			data.put("date", entry.getKeyAsString());
+			data.put("value", entry.getDocCount());
+			yeardata.add(data);
 			groupbyday.put(year, yeardata);
 		}
 
@@ -592,47 +593,50 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	}
 
 	@Override
-	public Map<String, List<Map<String, Object>>> aggregationByMonth(String user) throws IOException {
+	public Map<String, List<Map<String, Object>>> aggregationByMonth(String index, String user) throws IOException {
 
 		BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
 		TermQueryBuilder authorFilter = QueryBuilders.termQuery("author_id", user);
-        boolQuery.filter(authorFilter);
+		boolQuery.filter(authorFilter);
 		AggregationBuilder aggregation = null;
-		aggregation = AggregationBuilders.dateHistogram("agg").field("from_date").dateHistogramInterval(DateHistogramInterval.MONTH).format("yyyy-MMM");
+		aggregation = AggregationBuilders.dateHistogram(Constants.AGG).field("from_date")
+				.calendarInterval(DateHistogramInterval.MONTH).format("yyyy-MMM");
 		AggregationResponse aggregationResponse = new AggregationResponse();
 		if (aggregation == null)
-				return null;
+			return null;
 
 		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
 		if (boolQuery != null)
 			sourceBuilder.query(boolQuery);
 		sourceBuilder.aggregation(aggregation);
 
-		SearchRequest request = new SearchRequest("extended_observation");
+		SearchRequest request = new SearchRequest(index);
 		request.source(sourceBuilder);
 		SearchResponse response = client.search(request, RequestOptions.DEFAULT);
 		Histogram dateHistogram = response.getAggregations().get("agg");
 		Histogram.Bucket lastBucket = dateHistogram.getBuckets().get(dateHistogram.getBuckets().size() - 1);
-		Map<String, List<Map<String, Object>>> groupByMonth= new LinkedHashMap<>();
-		String currentYear = lastBucket.getKeyAsString().substring(0,4);
+		Map<String, List<Map<String, Object>>> groupByMonth = new LinkedHashMap<>();
+		String currentYear = lastBucket.getKeyAsString().substring(0, 4);
 
 		for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
-			String year = entry.getKeyAsString().substring(0,4);
-			Integer intervaldiff= Integer.parseInt(currentYear)-Integer.parseInt(year);
-			Integer intervalId = intervaldiff/50;
-			String intervalKey = String.format("%04d",Math.max( Integer.parseInt(currentYear)-((intervalId+1)*50),0)) + "-" + String.format("%04d",Integer.parseInt(currentYear)-(intervalId*50));
+			String year = entry.getKeyAsString().substring(0, 4);
+			Integer intervaldiff = Integer.parseInt(currentYear) - Integer.parseInt(year);
+			Integer intervalId = intervaldiff / 50;
+			String intervalKey = String.format("%04d",
+					Math.max(Integer.parseInt(currentYear) - ((intervalId + 1) * 50), 0)) + "-"
+					+ String.format("%04d", Integer.parseInt(currentYear) - (intervalId * 50));
 			List<Map<String, Object>> intervaldata;
-			if(groupByMonth.containsKey(intervalKey)) {
+			if (groupByMonth.containsKey(intervalKey)) {
 				intervaldata = groupByMonth.get(intervalKey);
 			} else {
 				intervaldata = new ArrayList<>();
 			}
 			Map<String, Object> data = new HashMap<>();
-        	data.put("month", entry.getKeyAsString().substring(5,8));
-			data.put("year", entry.getKeyAsString().substring(0,4));
-        	data.put("value", entry.getDocCount());
-        	intervaldata.add(data);
-        	groupByMonth.put(intervalKey, intervaldata);
+			data.put("month", entry.getKeyAsString().substring(5, 8));
+			data.put("year", entry.getKeyAsString().substring(0, 4));
+			data.put("value", entry.getDocCount());
+			intervaldata.add(data);
+			groupByMonth.put(intervalKey, intervaldata);
 		}
 
 		return groupByMonth;
@@ -666,11 +670,12 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			aggregation = AggregationBuilders.nested(nestedFiled, nestedFiled)
 					.subAggregation(AggregationBuilders.terms(nestedFilter).field(nestedFilter).size(1000));
 		} else if (filter.equals(Constants.GROUP_BY_DAY)) {
-			aggregation = AggregationBuilders.dateHistogram("agg").field("created_on").dateHistogramInterval(DateHistogramInterval.days(1)).format("yyyy-MM-dd");
+			aggregation = AggregationBuilders.dateHistogram(Constants.AGG).field("created_on")
+					.calendarInterval(DateHistogramInterval.days(1)).format("yyyy-MM-dd");
 		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
-			aggregation = AggregationBuilders.dateHistogram("agg").field("from_date").dateHistogramInterval(DateHistogramInterval.MONTH).format("yyyy-MMM");
-		}
-		else {
+			aggregation = AggregationBuilders.dateHistogram(Constants.AGG).field("from_date")
+					.calendarInterval(DateHistogramInterval.MONTH).format("yyyy-MMM");
+		} else {
 			aggregation = AggregationBuilders.terms(filter).field(filter).size(1000);
 		}
 
@@ -935,7 +940,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		Map<Object, Long> groupMonth;
 
 		if (filter.equals(Constants.MVR_SCIENTIFIC_NAME) || filter.equals(Constants.AUTHOR_ID)
-				|| filter.equals(Constants.IDENTIFIER_ID) || filter.equals(Constants.GROUP_BY_DAY) || filter.equals(Constants.GROUP_BY_OBSERVED)) {
+				|| filter.equals(Constants.IDENTIFIER_ID) || filter.equals(Constants.GROUP_BY_DAY)
+				|| filter.equals(Constants.GROUP_BY_OBSERVED)) {
 			groupMonth = new LinkedHashMap<Object, Long>();
 		} else {
 			groupMonth = new HashMap<Object, Long>();
@@ -970,7 +976,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
 				groupMonth.put(entry.getKeyAsString(), entry.getDocCount());
 			}
-		}else {
+		} else {
 			Terms frommonth = response.getAggregations().get(filter);
 
 			for (Terms.Bucket entry : frommonth.getBuckets()) {

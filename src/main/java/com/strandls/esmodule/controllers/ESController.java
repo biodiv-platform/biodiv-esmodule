@@ -390,20 +390,19 @@ public class ESController {
 	}
 
 	@GET
-	@Path(ApiConstants.AGGREGATION + "/{filter}")
+	@Path(ApiConstants.AGGREGATION + "/{index}/{user}")
 	@Produces(MediaType.APPLICATION_JSON)
 
-	@ApiOperation(value = "Aggregation for List Page", notes = "Returns Aggregated values", response = Map.class)
-	@ApiResponses(value = {
-			@ApiResponse(code = 400, message = "Location field not specified for bounds", response = String.class),
+	@ApiOperation(value = "Aggregation for temporal distribution-date created in user page", notes = "Return observations created on data group by year, filtered by userId", response = Map.class)
+	@ApiResponses(value = { @ApiResponse(code = 400, message = "Exception", response = String.class),
 			@ApiResponse(code = 500, message = "ERROR", response = String.class) })
 
-	public Response getAggregationPerDay(@PathParam("filter") String filter){
+	public Response getAggregationPerDay(@PathParam("index") String index, @PathParam("user") String user) {
 
 		Map<String, List<Map<String, Object>>> response = null;
-		
+
 		try {
-			response=elasticSearchService.aggregationByDay(filter);
+			response = elasticSearchService.aggregationByDay(index, user);
 			return Response.status(Status.OK).entity(response).build();
 		} catch (Exception e) {
 			throw new WebApplicationException(
@@ -412,20 +411,19 @@ public class ESController {
 	}
 
 	@GET
-	@Path(ApiConstants.MONTH_AGGREGATION + "/{user}")
+	@Path(ApiConstants.MONTH_AGGREGATION + "{index}/{user}")
 	@Produces(MediaType.APPLICATION_JSON)
 
-	@ApiOperation(value = "Aggregation for List Page", notes = "Returns Aggregated values", response = Map.class)
-	@ApiResponses(value = {
-			@ApiResponse(code = 400, message = "Location field not specified for bounds", response = String.class),
-			@ApiResponse(code = 500, message = "ERROR", response = String.class) })
+	@ApiOperation(value = "Aggregation for temporal distribution-month observed in user page", notes = "Return observed on data grouped by month into intervals of 50 years, filtered by userId", response = Map.class)
+	@ApiResponses(value = { @ApiResponse(code = 400, message = "Exception", response = String.class),
+			@ApiResponse(code = 500, message = "ERROR", response = String.class) })	
 
-	public Response getAggregationPerMonth(@PathParam("user") String user){
+	public Response getAggregationPerMonth(@PathParam("index") String index, @PathParam("user") String user) {
 
 		Map<String, List<Map<String, Object>>> response = null;
-		
+
 		try {
-			response=elasticSearchService.aggregationByMonth(user);
+			response = elasticSearchService.aggregationByMonth(index, user);
 			return Response.status(Status.OK).entity(response).build();
 		} catch (Exception e) {
 			throw new WebApplicationException(
@@ -784,8 +782,7 @@ public class ESController {
 	@ApiOperation(value = "Auto complete username", notes = "Returns List of userIbp", response = MapResponse.class)
 	@ApiResponses(value = { @ApiResponse(code = 500, message = "ERROR", response = String.class) })
 	public Response autocompleteUserIBP(@PathParam("index") String index, @PathParam("type") String type,
-			@QueryParam("userGroupId") String userGroupId, @QueryParam("name") String name)
-			throws IOException {
+			@QueryParam("userGroupId") String userGroupId, @QueryParam("name") String name) throws IOException {
 		MapResponse results = elasticSearchService.autocompleteUserIBP(index, type, userGroupId, name);
 		return Response.status(Status.OK).entity(results).build();
 	}
