@@ -71,6 +71,7 @@ import org.elasticsearch.search.aggregations.bucket.missing.Missing;
 import org.elasticsearch.search.aggregations.bucket.nested.Nested;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms.Bucket;
+import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.BucketScriptPipelineAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.BucketSortPipelineAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.ParsedSimpleValue;
@@ -675,6 +676,11 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
 			aggregation = AggregationBuilders.dateHistogram(Constants.AGG).field("from_date")
 					.calendarInterval(DateHistogramInterval.MONTH).format("yyyy-MMM");
+		} else if (filter.equals(Constants.GROUP_BY_TRAITS)) {
+			TermsAggregationBuilder termsAgg = AggregationBuilders.terms("traits_agg")
+					.field("facts.trait_value.trait_aggregation.raw").size(1000);
+			aggregation = termsAgg.subAggregation(AggregationBuilders.dateHistogram(Constants.AGG).field("from_date")
+					.calendarInterval(DateHistogramInterval.MONTH).format("yyyy-MMM").minDocCount(1));
 		} else {
 			aggregation = AggregationBuilders.terms(filter).field(filter).size(1000);
 		}
@@ -941,7 +947,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		if (filter.equals(Constants.MVR_SCIENTIFIC_NAME) || filter.equals(Constants.AUTHOR_ID)
 				|| filter.equals(Constants.IDENTIFIER_ID) || filter.equals(Constants.GROUP_BY_DAY)
-				|| filter.equals(Constants.GROUP_BY_OBSERVED)) {
+				|| filter.equals(Constants.GROUP_BY_OBSERVED) || filter.equals(Constants.GROUP_BY_TRAITS)) {
 			groupMonth = new LinkedHashMap<Object, Long>();
 		} else {
 			groupMonth = new HashMap<Object, Long>();
@@ -965,16 +971,32 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				groupMonth.put(entry.getKey(), entry.getDocCount());
 			}
 		} else if (filter.equals(Constants.GROUP_BY_DAY)) {
-			Histogram dateHistogram = response.getAggregations().get("agg");
+			Histogram dateHistogram = response.getAggregations().get(Constants.AGG);
 
 			for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
 				groupMonth.put(entry.getKeyAsString(), entry.getDocCount());
 			}
 		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
-			Histogram dateHistogram = response.getAggregations().get("agg");
+			Histogram dateHistogram = response.getAggregations().get(Constants.AGG);
 
 			for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
 				groupMonth.put(entry.getKeyAsString(), entry.getDocCount());
+			}
+		} else if (filter.equals(Constants.GROUP_BY_TRAITS)) {
+			Terms termsHistogram = response.getAggregations().get("traits_agg");
+			List<String> months = Arrays.asList("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
+					"Nov", "Dec");
+			for (Terms.Bucket entry : termsHistogram.getBuckets()) {
+				Histogram dateHistogram = entry.getAggregations().get("agg");
+				Map<String, Long> monthSumDays = new LinkedHashMap<>();
+				for (Histogram.Bucket dateEntry : dateHistogram.getBuckets()) {
+					String monthName = dateEntry.getKeyAsString().substring(5, 8);
+					monthSumDays.put(monthName,
+							monthSumDays.getOrDefault(monthName, (long) 0) + dateEntry.getDocCount());
+				}
+				for (String month : months) {
+					groupMonth.put(entry.getKeyAsString() + "_" + month, monthSumDays.getOrDefault(month, (long) 0));
+				}
 			}
 		} else {
 			Terms frommonth = response.getAggregations().get(filter);

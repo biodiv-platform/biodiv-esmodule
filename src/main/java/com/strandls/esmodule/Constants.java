@@ -22,5 +22,6 @@ public class Constants {
 	public static final String IDENTIFIER_ID = "all_reco_vote.authors_voted.id";
 	public static final String GROUP_BY_DAY = "group_by_day";
 	public static final String GROUP_BY_OBSERVED = "group_by_observed";
+	public static final String GROUP_BY_TRAITS = "group_by_traits";
 	public static final String AGG = "agg";
 }
