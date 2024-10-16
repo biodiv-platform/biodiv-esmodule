@@ -8,6 +8,7 @@ import java.util.Map;
 import com.strandls.esmodule.indexes.pojo.ExtendedTaxonDefinition;
 import com.strandls.esmodule.models.AggregationResponse;
 import com.strandls.esmodule.models.AuthorUploadedObservationInfo;
+import com.strandls.esmodule.models.DayAggregation;
 import com.strandls.esmodule.models.FilterPanelData;
 import com.strandls.esmodule.models.GeoHashAggregationData;
 import com.strandls.esmodule.models.IdentifiersInfo;
@@ -15,6 +16,7 @@ import com.strandls.esmodule.models.MapDocument;
 import com.strandls.esmodule.models.MapQueryResponse;
 import com.strandls.esmodule.models.MapResponse;
 import com.strandls.esmodule.models.MapSearchParams;
+import com.strandls.esmodule.models.MonthAggregation;
 import com.strandls.esmodule.models.ObservationInfo;
 import com.strandls.esmodule.models.ObservationLatLon;
 import com.strandls.esmodule.models.ObservationNearBy;
@@ -209,6 +211,22 @@ public interface ElasticSearchService {
 	 */
 	MapDocument termsAggregation(String index, String type, String field, String subField, Integer size,
 			String locationField, MapSearchQuery query) throws IOException;
+
+	/**
+	 * 
+	 * @param index
+	 * @param user
+	 * @return {@link Map}
+	 */
+	Map<String, List<DayAggregation>> aggregationByDay(String index, String user) throws IOException;
+
+	/**
+	 * 
+	 * @param index
+	 * @param user
+	 * @return {@link Map}
+	 */
+	Map<String, List<MonthAggregation>> aggregationByMonth(String index, String user) throws IOException;
 
 	/**
 	 * 
