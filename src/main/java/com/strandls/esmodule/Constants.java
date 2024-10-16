@@ -23,5 +23,5 @@ public class Constants {
 	public static final String GROUP_BY_DAY = "group_by_day";
 	public static final String GROUP_BY_OBSERVED = "group_by_observed";
 	public static final String GROUP_BY_TRAITS = "group_by_traits";
-	public static final String AGG = "agg";
+	public static final String TEMPORAL_AGG = "temporal_agg";
 }

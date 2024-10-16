@@ -32,6 +32,7 @@ import com.strandls.esmodule.indexes.pojo.ExtendedTaxonDefinition;
 import com.strandls.esmodule.indexes.pojo.UserScore;
 import com.strandls.esmodule.models.AggregationResponse;
 import com.strandls.esmodule.models.AuthorUploadedObservationInfo;
+import com.strandls.esmodule.models.DayAggregation;
 import com.strandls.esmodule.models.FilterPanelData;
 import com.strandls.esmodule.models.GeoHashAggregationData;
 import com.strandls.esmodule.models.IdentifiersInfo;
@@ -42,6 +43,7 @@ import com.strandls.esmodule.models.MapQueryResponse;
 import com.strandls.esmodule.models.MapResponse;
 import com.strandls.esmodule.models.MapSearchParams;
 import com.strandls.esmodule.models.MapSortType;
+import com.strandls.esmodule.models.MonthAggregation;
 import com.strandls.esmodule.models.ObservationInfo;
 import com.strandls.esmodule.models.ObservationLatLon;
 import com.strandls.esmodule.models.ObservationNearBy;
@@ -390,7 +392,7 @@ public class ESController {
 	}
 
 	@GET
-	@Path(ApiConstants.AGGREGATION + "/{index}/{user}")
+	@Path(ApiConstants.TEMPORAL_AGGREGATION + "/{index}/{user}")
 	@Produces(MediaType.APPLICATION_JSON)
 
 	@ApiOperation(value = "Aggregation for temporal distribution-date created in user page", notes = "Return observations created on data group by year, filtered by userId", response = Map.class)
@@ -399,7 +401,7 @@ public class ESController {
 
 	public Response getAggregationPerDay(@PathParam("index") String index, @PathParam("user") String user) {
 
-		Map<String, List<Map<String, Object>>> response = null;
+		Map<String, List<DayAggregation>> response = null;
 
 		try {
 			response = elasticSearchService.aggregationByDay(index, user);
@@ -411,16 +413,16 @@ public class ESController {
 	}
 
 	@GET
-	@Path(ApiConstants.MONTH_AGGREGATION + "{index}/{user}")
+	@Path(ApiConstants.MONTH_AGGREGATION + "/{index}/{user}")
 	@Produces(MediaType.APPLICATION_JSON)
 
 	@ApiOperation(value = "Aggregation for temporal distribution-month observed in user page", notes = "Return observed on data grouped by month into intervals of 50 years, filtered by userId", response = Map.class)
 	@ApiResponses(value = { @ApiResponse(code = 400, message = "Exception", response = String.class),
-			@ApiResponse(code = 500, message = "ERROR", response = String.class) })	
+			@ApiResponse(code = 500, message = "ERROR", response = String.class) })
 
 	public Response getAggregationPerMonth(@PathParam("index") String index, @PathParam("user") String user) {
 
-		Map<String, List<Map<String, Object>>> response = null;
+		Map<String, List<MonthAggregation>> response = null;
 
 		try {
 			response = elasticSearchService.aggregationByMonth(index, user);
