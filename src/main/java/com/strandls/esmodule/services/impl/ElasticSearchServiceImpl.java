@@ -64,10 +64,13 @@ import org.elasticsearch.search.aggregations.bucket.filter.Filter;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGrid;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGridAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.geogrid.ParsedGeoHashGrid;
+import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramInterval;
+import org.elasticsearch.search.aggregations.bucket.histogram.Histogram;
 import org.elasticsearch.search.aggregations.bucket.missing.Missing;
 import org.elasticsearch.search.aggregations.bucket.nested.Nested;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms.Bucket;
+import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.BucketScriptPipelineAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.BucketSortPipelineAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.ParsedSimpleValue;
@@ -97,6 +100,7 @@ import com.strandls.esmodule.models.AggregationResponse;
 import com.strandls.esmodule.models.AuthorUploadedObservationInfo;
 import com.strandls.esmodule.models.CustomFieldValues;
 import com.strandls.esmodule.models.CustomFields;
+import com.strandls.esmodule.models.DayAggregation;
 import com.strandls.esmodule.models.FilterPanelData;
 import com.strandls.esmodule.models.GeoHashAggregationData;
 import com.strandls.esmodule.models.IdentifiersInfo;
@@ -109,6 +113,7 @@ import com.strandls.esmodule.models.MapSearchParams;
 import com.strandls.esmodule.models.MapSortType;
 import com.strandls.esmodule.models.MaxVotedReco;
 import com.strandls.esmodule.models.MaxVotedRecoFreq;
+import com.strandls.esmodule.models.MonthAggregation;
 import com.strandls.esmodule.models.ObservationInfo;
 import com.strandls.esmodule.models.ObservationLatLon;
 import com.strandls.esmodule.models.ObservationMapInfo;
@@ -143,6 +148,9 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	private static final Integer TOTAL_USER_UPPER_BOUND = 20000;
 
 	private static final String USERGROUP = "userGroup";
+
+	List<String> months = Arrays.asList("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov",
+			"Dec");
 
 	/*
 	 * (non-Javadoc)
@@ -547,6 +555,94 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	}
 
 	@Override
+	public Map<String, List<DayAggregation>> aggregationByDay(String index, String user) throws IOException {
+
+		BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+		TermQueryBuilder authorFilter = QueryBuilders.termQuery("author_id", user);
+		boolQuery.filter(authorFilter);
+		AggregationBuilder aggregation = null;
+		aggregation = AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("created_on")
+				.calendarInterval(DateHistogramInterval.days(1)).format("yyyy-MM-dd");
+		if (aggregation == null)
+			return null;
+
+		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+		if (boolQuery != null)
+			sourceBuilder.query(boolQuery);
+		sourceBuilder.aggregation(aggregation);
+
+		SearchRequest request = new SearchRequest(index);
+		request.source(sourceBuilder);
+		SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+		Map<String, List<DayAggregation>> groupbyday = new LinkedHashMap<>();
+		Histogram dateHistogram = response.getAggregations().get(Constants.TEMPORAL_AGG);
+
+		for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
+			String year = entry.getKeyAsString().substring(0, 4); // Extract the year
+			List<DayAggregation> yeardata;
+			if (groupbyday.containsKey(year)) {
+				yeardata = groupbyday.get(year);
+			} else {
+				yeardata = new ArrayList<>();
+			}
+
+			DayAggregation data = new DayAggregation(entry.getKeyAsString(), entry.getDocCount());
+			yeardata.add(data);
+			groupbyday.put(year, yeardata);
+		}
+
+		return groupbyday;
+	}
+
+	@Override
+	public Map<String, List<MonthAggregation>> aggregationByMonth(String index, String user) throws IOException {
+
+		BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+		TermQueryBuilder authorFilter = QueryBuilders.termQuery("author_id", user);
+		boolQuery.filter(authorFilter);
+		AggregationBuilder aggregation = null;
+		aggregation = AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("from_date")
+				.calendarInterval(DateHistogramInterval.MONTH).format("yyyy-MMM");
+		if (aggregation == null)
+			return null;
+
+		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+		if (boolQuery != null)
+			sourceBuilder.query(boolQuery);
+		sourceBuilder.aggregation(aggregation);
+
+		SearchRequest request = new SearchRequest(index);
+		request.source(sourceBuilder);
+		SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+		Histogram dateHistogram = response.getAggregations().get(Constants.TEMPORAL_AGG);
+		Histogram.Bucket lastBucket = dateHistogram.getBuckets().get(dateHistogram.getBuckets().size() - 1);
+		Map<String, List<MonthAggregation>> groupByMonth = new LinkedHashMap<>();
+		Integer yearInterval = 50;
+		String currentYear = lastBucket.getKeyAsString().substring(0, 4);
+
+		for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
+			String year = entry.getKeyAsString().substring(0, 4); // Extract the year
+			Integer intervaldiff = Integer.parseInt(currentYear) - Integer.parseInt(year);
+			Integer intervalId = intervaldiff / yearInterval;
+			String intervalKey = String.format("%04d", // %04d formats the number as a 4-digit year (e.g., 0050)
+					Math.max(Integer.parseInt(currentYear) - ((intervalId + 1) * yearInterval), 0)) + "-"
+					+ String.format("%04d", Integer.parseInt(currentYear) - (intervalId * yearInterval));
+			List<MonthAggregation> intervaldata;
+			if (groupByMonth.containsKey(intervalKey)) {
+				intervaldata = groupByMonth.get(intervalKey);
+			} else {
+				intervaldata = new ArrayList<>();
+			}
+			String month = entry.getKeyAsString().substring(5, 8); // Extract the month
+			MonthAggregation data = new MonthAggregation(month, year, entry.getDocCount());
+			intervaldata.add(data);
+			groupByMonth.put(intervalKey, intervaldata);
+		}
+
+		return groupByMonth;
+	}
+
+	@Override
 	public AggregationResponse aggregation(String index, String type, MapSearchQuery searchQuery,
 			String geoAggregationField, String filter, String geoShapeFilterField) throws IOException {
 		String indexParam = index.replaceAll("[\n\r\t]", "_");
@@ -573,6 +669,18 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			String nestedFilter = filter.replace("nested.", "");
 			aggregation = AggregationBuilders.nested(nestedFiled, nestedFiled)
 					.subAggregation(AggregationBuilders.terms(nestedFilter).field(nestedFilter).size(1000));
+		} else if (filter.equals(Constants.GROUP_BY_DAY)) {
+			aggregation = AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("created_on")
+					.calendarInterval(DateHistogramInterval.days(1)).format("yyyy-MM-dd");
+		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
+			aggregation = AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("from_date")
+					.calendarInterval(DateHistogramInterval.MONTH).format("yyyy-MMM");
+		} else if (filter.equals(Constants.GROUP_BY_TRAITS)) {
+			TermsAggregationBuilder termsAgg = AggregationBuilders.terms("traits_agg")
+					.field("facts.trait_value.trait_aggregation.raw").size(1000);
+			aggregation = termsAgg
+					.subAggregation(AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("from_date")
+							.calendarInterval(DateHistogramInterval.MONTH).format("yyyy-MMM").minDocCount(1));
 		} else {
 			aggregation = AggregationBuilders.terms(filter).field(filter).size(1000);
 		}
@@ -838,7 +946,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		Map<Object, Long> groupMonth;
 
 		if (filter.equals(Constants.MVR_SCIENTIFIC_NAME) || filter.equals(Constants.AUTHOR_ID)
-				|| filter.equals(Constants.IDENTIFIER_ID)) {
+				|| filter.equals(Constants.IDENTIFIER_ID) || filter.equals(Constants.GROUP_BY_DAY)
+				|| filter.equals(Constants.GROUP_BY_OBSERVED) || filter.equals(Constants.GROUP_BY_TRAITS)) {
 			groupMonth = new LinkedHashMap<Object, Long>();
 		} else {
 			groupMonth = new HashMap<Object, Long>();
@@ -860,6 +969,32 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			Terms termResp = nestedResponse.getAggregations().get(filter.replace("nested.", ""));
 			for (Terms.Bucket entry : termResp.getBuckets()) {
 				groupMonth.put(entry.getKey(), entry.getDocCount());
+			}
+		} else if (filter.equals(Constants.GROUP_BY_DAY)) {
+			Histogram dateHistogram = response.getAggregations().get(Constants.TEMPORAL_AGG);
+
+			for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
+				groupMonth.put(entry.getKeyAsString(), entry.getDocCount());
+			}
+		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
+			Histogram dateHistogram = response.getAggregations().get(Constants.TEMPORAL_AGG);
+
+			for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
+				groupMonth.put(entry.getKeyAsString(), entry.getDocCount());
+			}
+		} else if (filter.equals(Constants.GROUP_BY_TRAITS)) {
+			Terms termsHistogram = response.getAggregations().get("traits_agg");
+			for (Terms.Bucket entry : termsHistogram.getBuckets()) {
+				Histogram dateHistogram = entry.getAggregations().get(Constants.TEMPORAL_AGG);
+				Map<String, Long> monthSumDays = new LinkedHashMap<>();
+				for (Histogram.Bucket dateEntry : dateHistogram.getBuckets()) {
+					String monthName = dateEntry.getKeyAsString().substring(5, 8); // Extract the month
+					monthSumDays.put(monthName,
+							monthSumDays.getOrDefault(monthName, (long) 0) + dateEntry.getDocCount());
+				}
+				for (String month : months) {
+					groupMonth.put(entry.getKeyAsString() + "_" + month, monthSumDays.getOrDefault(month, (long) 0));
+				}
 			}
 		} else {
 			Terms frommonth = response.getAggregations().get(filter);
