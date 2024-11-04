@@ -60,6 +60,9 @@ import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.BucketOrder;
 import org.elasticsearch.search.aggregations.PipelineAggregatorBuilders;
+import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregation;
+import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregationBuilder;
+import org.elasticsearch.search.aggregations.bucket.composite.TermsValuesSourceBuilder;
 import org.elasticsearch.search.aggregations.bucket.filter.Filter;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGrid;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGridAggregationBuilder;
@@ -681,6 +684,9 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			aggregation = termsAgg
 					.subAggregation(AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("from_date")
 							.calendarInterval(DateHistogramInterval.MONTH).format("yyyy-MMM").minDocCount(1));
+		} else if (filter.equals(Constants.GROUP_BY_TAXON)) {
+			aggregation = AggregationBuilders.terms("taxon_agg").field("max_voted_reco.hierarchy.taxon_id")
+					.size(500000);
 		} else {
 			aggregation = AggregationBuilders.terms(filter).field(filter).size(1000);
 		}
@@ -947,7 +953,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		if (filter.equals(Constants.MVR_SCIENTIFIC_NAME) || filter.equals(Constants.AUTHOR_ID)
 				|| filter.equals(Constants.IDENTIFIER_ID) || filter.equals(Constants.GROUP_BY_DAY)
-				|| filter.equals(Constants.GROUP_BY_OBSERVED) || filter.equals(Constants.GROUP_BY_TRAITS)) {
+				|| filter.equals(Constants.GROUP_BY_OBSERVED) || filter.equals(Constants.GROUP_BY_TRAITS)
+				|| filter.equals(Constants.GROUP_BY_TAXON)) {
 			groupMonth = new LinkedHashMap<Object, Long>();
 		} else {
 			groupMonth = new HashMap<Object, Long>();
@@ -994,6 +1001,46 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				}
 				for (String month : months) {
 					groupMonth.put(entry.getKeyAsString() + "_" + month, monthSumDays.getOrDefault(month, (long) 0));
+				}
+			}
+		} else if (filter.equals(Constants.GROUP_BY_TAXON)) {
+			Terms termsHistogram = response.getAggregations().get("taxon_agg");
+			Map<String, Long> fromMonth = new LinkedHashMap<>();
+			for (Terms.Bucket entry : termsHistogram.getBuckets()) {
+				fromMonth.put(entry.getKeyAsString(), entry.getDocCount());
+			}
+			Map<String, Object> afterKey = Map.of("path", "1");
+			for (int i = 1; i <= 10; i++) {
+				CompositeAggregationBuilder taxon_aggregation = AggregationBuilders
+						.composite("NAME", List.of(new TermsValuesSourceBuilder("path").field("path.keyword")))
+						.size(10000);
+				if (afterKey != null) {
+					taxon_aggregation.aggregateAfter(afterKey);
+				}
+				TermsAggregationBuilder subAggregation = AggregationBuilders.terms("raw_name").field("name.raw")
+						.size(10);
+				taxon_aggregation.subAggregation(subAggregation);
+				SearchSourceBuilder taxonsourceBuilder = new SearchSourceBuilder();
+				taxonsourceBuilder.aggregation(taxon_aggregation);
+
+				SearchRequest taxon_request = new SearchRequest("extended_taxon_definition");
+				taxon_request.source(taxonsourceBuilder);
+				SearchResponse taxon_response = client.search(taxon_request, RequestOptions.DEFAULT);
+				CompositeAggregation taxonagg = taxon_response.getAggregations().get("NAME");
+				List<? extends CompositeAggregation.Bucket> taxonbuckets = taxonagg.getBuckets();
+				for (CompositeAggregation.Bucket bucket : taxonbuckets) {
+					String[] parts = bucket.getKey().get("path").toString().split("\\.");
+					Long value = fromMonth.get(parts[parts.length - 1]);
+					if (value != null) {
+						Terms bucket_name = bucket.getAggregations().get("raw_name");
+						for (Terms.Bucket n : bucket_name.getBuckets()) {
+							groupMonth.put(n.getKeyAsString() + '|' + bucket.getKey().get("path"), value);
+						}
+					}
+				}
+				afterKey = taxonagg.afterKey();
+				if (afterKey == null) {
+					break;
 				}
 			}
 		} else {
