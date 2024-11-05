@@ -1017,7 +1017,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				if (afterKey != null) {
 					taxon_aggregation.aggregateAfter(afterKey);
 				}
-				TermsAggregationBuilder subAggregation = AggregationBuilders.terms("raw_name").field("name.raw")
+				TermsAggregationBuilder subAggregation = AggregationBuilders.terms("raw_name").field("italicised_form.keyword")
 						.size(10);
 				taxon_aggregation.subAggregation(subAggregation);
 				SearchSourceBuilder taxonsourceBuilder = new SearchSourceBuilder();
