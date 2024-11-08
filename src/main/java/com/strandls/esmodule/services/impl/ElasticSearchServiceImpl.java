@@ -1010,7 +1010,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				fromMonth.put(entry.getKeyAsString(), entry.getDocCount());
 			}
 			Map<String, Object> afterKey = Map.of("path", "1");
-			for (int i = 1; i <= 10; i++) {
+			while(afterKey!=null) {
 				CompositeAggregationBuilder taxon_aggregation = AggregationBuilders
 						.composite("NAME", List.of(new TermsValuesSourceBuilder("path").field("path.keyword")))
 						.size(10000);
@@ -1039,9 +1039,6 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 					}
 				}
 				afterKey = taxonagg.afterKey();
-				if (afterKey == null) {
-					break;
-				}
 			}
 		} else {
 			Terms frommonth = response.getAggregations().get(filter);
