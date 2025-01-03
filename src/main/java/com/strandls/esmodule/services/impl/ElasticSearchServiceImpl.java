@@ -255,6 +255,15 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		return new MapQueryResponse(queryStatus, failureReason);
 	}
 
+	@Override
+	public String esUpdate(String type, String id, String content) throws IOException {
+
+		// Field: Create an UpdateRequest"
+		UpdateRequest updateRequest = new UpdateRequest(type, id).doc(content, XContentType.JSON);
+		UpdateResponse updateResponse = client.update(updateRequest, RequestOptions.DEFAULT);
+		return updateResponse.toString();
+	}
+
 	/*
 	 * (non-Javadoc)
 	 * 
@@ -1010,15 +1019,15 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				fromMonth.put(entry.getKeyAsString(), entry.getDocCount());
 			}
 			Map<String, Object> afterKey = Map.of("path", "1");
-			while(afterKey!=null) {
+			while (afterKey != null) {
 				CompositeAggregationBuilder taxon_aggregation = AggregationBuilders
 						.composite("NAME", List.of(new TermsValuesSourceBuilder("path").field("path.keyword")))
 						.size(10000);
 				if (afterKey != null) {
 					taxon_aggregation.aggregateAfter(afterKey);
 				}
-				TermsAggregationBuilder subAggregation = AggregationBuilders.terms("raw_name").field("italicised_form.keyword")
-						.size(10);
+				TermsAggregationBuilder subAggregation = AggregationBuilders.terms("raw_name")
+						.field("italicised_form.keyword").size(10);
 				taxon_aggregation.subAggregation(subAggregation);
 				SearchSourceBuilder taxonsourceBuilder = new SearchSourceBuilder();
 				taxonsourceBuilder.aggregation(taxon_aggregation);

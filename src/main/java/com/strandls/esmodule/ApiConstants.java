@@ -43,6 +43,7 @@ public class ApiConstants {
 	public static final String GETTOPUSERS = "/leaderboard";
 	public static final String GETUSERSCORE = "/userscore";
 	public static final String USERIBP = "/userIbp";
+	public static final String UPDATE = "/update";
 	public static final String REINDEX = "/reindex";
 	public static final String FILTERAUTOCOMPLETE = "/filterautocomplete";
 	public static final String LIST = "/list";
