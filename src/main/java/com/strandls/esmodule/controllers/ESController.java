@@ -760,6 +760,40 @@ public class ESController {
 	}
 
 	@GET
+	@Path(ApiConstants.MATCH + "/{index}/{type}")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+
+	@ApiOperation(value = "Match In Elastic", notes = "Returns Success Failure", response = List.class)
+	@ApiResponses(value = { @ApiResponse(code = 500, message = "ERROR", response = String.class) })
+	public Response match(@DefaultValue("etd") @PathParam("index") String index,
+			@DefaultValue("er") @PathParam("type") String type,
+			@DefaultValue("name") @QueryParam("scientificField") String scientificField,
+			@QueryParam("scientificText") String scientificText,
+			@DefaultValue("canonical_form") @QueryParam("canonicalField") String canonicalField,
+			@QueryParam("canonicalText") String canonicalText) {
+
+		index = utilityMethods.getEsIndexConstants(index);
+		type = utilityMethods.getEsIndexTypeConstant(type);
+		Boolean checkOnAllParam = false;
+		if (!scientificText.isEmpty() || scientificText != null) {
+			checkOnAllParam = true;
+		}
+
+		try {
+			List<ExtendedTaxonDefinition> records = elasticSearchService.matchPhrase(index, type, scientificField,
+					scientificText, canonicalField, canonicalText, checkOnAllParam);
+			if (records.size() > 1) {
+				records = utilityMethods.rankDocument(records, canonicalField, scientificText);
+				return Response.status(Status.OK).entity(records).build();
+			}
+			return Response.status(Status.OK).entity(records).build();
+		} catch (Exception e) {
+			throw new WebApplicationException(Response.status(Status.NO_CONTENT).entity(e.getMessage()).build());
+		}
+	}
+
+	@GET
 	@Path(ApiConstants.GETTOPUSERS + "/{index}/{type}")
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)

@@ -38,6 +38,7 @@ public class ApiConstants {
 	public static final String NEARBY = "/nearby";
 	public static final String AUTOSUGGEST = "/suggest";
 	public static final String MATCHPHRASE = "/exactmatch";
+	public static final String MATCH = "/multiplematch";
 	public static final String AUTOCOMPLETE = "/auto-complete";
 
 	public static final String GETTOPUSERS = "/leaderboard";
