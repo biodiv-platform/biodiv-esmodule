@@ -39,6 +39,7 @@ public class ApiConstants {
 	public static final String AUTOSUGGEST = "/suggest";
 	public static final String MATCHPHRASE = "/exactmatch";
 	public static final String AUTOCOMPLETE = "/auto-complete";
+	public static final String SPECIESCONTRIBUTOR = "/speciesContributor";
 
 	public static final String GETTOPUSERS = "/leaderboard";
 	public static final String GETUSERSCORE = "/userscore";
