@@ -187,6 +187,28 @@ public class ESController {
 		}
 	}
 
+	@PUT
+	@Path(ApiConstants.UPDATE + "/{type}/{id}")
+	@Produces(MediaType.APPLICATION_JSON)
+
+	@ApiOperation(value = "Aggregation for temporal distribution-month observed in user page", notes = "Return observed on data grouped by month into intervals of 50 years, filtered by userId", response = String.class)
+	@ApiResponses(value = { @ApiResponse(code = 400, message = "Exception", response = String.class),
+			@ApiResponse(code = 500, message = "ERROR", response = String.class) })
+
+	public String updateEsField(@PathParam("type") String type, @PathParam("id") String id,
+			@ApiParam(name = "content") String content) {
+
+		String response = null;
+
+		try {
+			response = elasticSearchService.esUpdate(type, id, content);
+			return response;
+		} catch (Exception e) {
+			throw new WebApplicationException(
+					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
+		}
+	}
+
 	@DELETE
 	@Path(ApiConstants.DATA + "/{index}/{type}/{documentId}")
 	@Produces(MediaType.APPLICATION_JSON)
@@ -732,6 +754,40 @@ public class ESController {
 				return Response.status(Status.OK).entity(records.get(0)).build();
 			}
 			return Response.status(Status.OK).entity(records.get(0)).build();
+		} catch (Exception e) {
+			throw new WebApplicationException(Response.status(Status.NO_CONTENT).entity(e.getMessage()).build());
+		}
+	}
+
+	@GET
+	@Path(ApiConstants.MATCH + "/{index}/{type}")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+
+	@ApiOperation(value = "Match In Elastic", notes = "Returns Success Failure", response = List.class)
+	@ApiResponses(value = { @ApiResponse(code = 500, message = "ERROR", response = String.class) })
+	public Response match(@DefaultValue("etd") @PathParam("index") String index,
+			@DefaultValue("er") @PathParam("type") String type,
+			@DefaultValue("name") @QueryParam("scientificField") String scientificField,
+			@QueryParam("scientificText") String scientificText,
+			@DefaultValue("canonical_form") @QueryParam("canonicalField") String canonicalField,
+			@QueryParam("canonicalText") String canonicalText) {
+
+		index = utilityMethods.getEsIndexConstants(index);
+		type = utilityMethods.getEsIndexTypeConstant(type);
+		Boolean checkOnAllParam = false;
+		if (!scientificText.isEmpty() || scientificText != null) {
+			checkOnAllParam = true;
+		}
+
+		try {
+			List<ExtendedTaxonDefinition> records = elasticSearchService.matchPhrase(index, type, scientificField,
+					scientificText, canonicalField, canonicalText, checkOnAllParam);
+			if (records.size() > 1) {
+				records = utilityMethods.rankDocument(records, canonicalField, scientificText);
+				return Response.status(Status.OK).entity(records).build();
+			}
+			return Response.status(Status.OK).entity(records).build();
 		} catch (Exception e) {
 			throw new WebApplicationException(Response.status(Status.NO_CONTENT).entity(e.getMessage()).build());
 		}
