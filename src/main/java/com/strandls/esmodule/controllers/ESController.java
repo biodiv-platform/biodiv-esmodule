@@ -846,6 +846,18 @@ public class ESController {
 	}
 
 	@GET
+	@Path(ApiConstants.SPECIESCONTRIBUTOR + ApiConstants.AUTOCOMPLETE + "/{index}/{type}")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@ApiOperation(value = "Auto complete username", notes = "Returns List of userIbp", response = MapResponse.class)
+	@ApiResponses(value = { @ApiResponse(code = 500, message = "ERROR", response = String.class) })
+	public Response autocompleteUserSpeciesContributor(@PathParam("index") String index, @PathParam("type") String type,
+			@QueryParam("name") String name) throws IOException {
+		MapResponse results = elasticSearchService.autocompleteSpeciesContributors(index, type, name);
+		return Response.status(Status.OK).entity(results).build();
+	}
+
+	@GET
 	@Path(ApiConstants.GETUSERSCORE)
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)

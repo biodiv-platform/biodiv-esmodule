@@ -347,4 +347,6 @@ public interface ElasticSearchService {
 
 	public MapResponse autocompleteUserIBP(String index, String type, String userGroupId, String name)
 			throws IOException;
+
+	public MapResponse autocompleteSpeciesContributors(String index, String type, String name) throws IOException;
 }

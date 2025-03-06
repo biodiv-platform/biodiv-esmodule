@@ -944,7 +944,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	}
 
 	private AggregationResponse groupAggregation(String index, AggregationBuilder aggQuery, QueryBuilder query,
-			String filter) throws IOException {
+			String filter) {
 
 		if (aggQuery == null)
 			return null;
@@ -956,7 +956,14 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		SearchRequest request = new SearchRequest(index);
 		request.source(sourceBuilder);
-		SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+		SearchResponse response = null;
+		try {
+			response = client.search(request, RequestOptions.DEFAULT);
+		} catch (Exception e) {
+			e.printStackTrace();
+			// TODO Auto-generated catch block
+			logger.error(e.getMessage());
+		}
 
 		Map<Object, Long> groupMonth;
 
@@ -1034,7 +1041,13 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 				SearchRequest taxon_request = new SearchRequest("extended_taxon_definition");
 				taxon_request.source(taxonsourceBuilder);
-				SearchResponse taxon_response = client.search(taxon_request, RequestOptions.DEFAULT);
+				SearchResponse taxon_response = null;
+				try {
+					taxon_response = client.search(taxon_request, RequestOptions.DEFAULT);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					logger.error(e.getMessage());
+				}
 				CompositeAggregation taxonagg = taxon_response.getAggregations().get("NAME");
 				List<? extends CompositeAggregation.Bucket> taxonbuckets = taxonagg.getBuckets();
 				for (CompositeAggregation.Bucket bucket : taxonbuckets) {
@@ -1416,6 +1429,36 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		return new MapResponse(result, totalHits, null);
 
+	}
+
+	@Override
+	public MapResponse autocompleteSpeciesContributors(String index, String type, String name) throws IOException {
+
+		SearchRequest searchRequest = new SearchRequest(index);
+		SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+		searchSourceBuilder.size(10);
+		BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+
+		// Must have role "SPECIES CONTRIBUTOR" in taxonomy
+		boolQueryBuilder.must(QueryBuilders.nestedQuery("taxonomy",
+				QueryBuilders.termQuery("taxonomy.role.keyword", "SPECIES CONTRIBUTOR"), ScoreMode.None));
+
+		// Name matching for autocomplete
+		boolQueryBuilder.must(QueryBuilders.matchPhrasePrefixQuery("user.name", name));
+
+		searchSourceBuilder.query(boolQueryBuilder);
+		searchRequest.source(searchSourceBuilder);
+
+		SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+		List<MapDocument> result = new ArrayList<>();
+
+		for (SearchHit hit : searchResponse.getHits().getHits()) {
+			result.add(new MapDocument(hit.getSourceAsString()));
+		}
+
+		long totalHits = searchResponse.getHits().getTotalHits().value;
+
+		return new MapResponse(result, totalHits, null);
 	}
 
 	private String cleanAutoCompleteResponse(String[] resRegex, String text) {
