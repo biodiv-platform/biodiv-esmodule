@@ -1016,7 +1016,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			for (Terms.Bucket entry : termsHistogram.getBuckets()) {
 				fromMonth.put(entry.getKeyAsString(), entry.getDocCount());
 			}
-			Map<String, Object> afterKey = Map.of("path", "1");
+			Map<String, Object> afterKey = new HashMap<>();
+			afterKey.put("path", "1");
 			while (afterKey != null) {
 				CompositeAggregationBuilder taxon_aggregation = AggregationBuilders
 						.composite("NAME", List.of(new TermsValuesSourceBuilder("path").field("path.keyword")))
