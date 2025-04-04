@@ -38,12 +38,14 @@ public class ApiConstants {
 	public static final String NEARBY = "/nearby";
 	public static final String AUTOSUGGEST = "/suggest";
 	public static final String MATCHPHRASE = "/exactmatch";
+	public static final String MATCH = "/multiplematch";
 	public static final String AUTOCOMPLETE = "/auto-complete";
 	public static final String SPECIESCONTRIBUTOR = "/speciesContributor";
 
 	public static final String GETTOPUSERS = "/leaderboard";
 	public static final String GETUSERSCORE = "/userscore";
 	public static final String USERIBP = "/userIbp";
+	public static final String UPDATE = "/update";
 	public static final String REINDEX = "/reindex";
 	public static final String FILTERAUTOCOMPLETE = "/filterautocomplete";
 	public static final String LIST = "/list";
