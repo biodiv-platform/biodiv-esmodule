@@ -74,20 +74,6 @@ public interface ElasticSearchService {
 			throws IOException;
 
 	/**
-	 * Updates a document in es if it exists
-	 * 
-	 * @param content
-	 * 
-	 * @param index      the index of the document
-	 * @param type       the type of the document
-	 * @param documentId unique id of the document
-	 * @param document   the document in the form of key-value pairs to be updated
-	 * @return {@link MapQueryResponse} containing the status of the operation
-	 * @throws IOException throws {@link IOException}
-	 */
-	String esUpdate(String type, String id, String content) throws IOException;
-
-	/**
 	 * Deletes a document in es if it exists
 	 * 
 	 * @param index      the index of the document

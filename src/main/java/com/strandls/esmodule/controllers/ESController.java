@@ -187,28 +187,6 @@ public class ESController {
 		}
 	}
 
-	@PUT
-	@Path(ApiConstants.UPDATE + "/{type}/{id}")
-	@Produces(MediaType.APPLICATION_JSON)
-
-	@ApiOperation(value = "Aggregation for temporal distribution-month observed in user page", notes = "Return observed on data grouped by month into intervals of 50 years, filtered by userId", response = String.class)
-	@ApiResponses(value = { @ApiResponse(code = 400, message = "Exception", response = String.class),
-			@ApiResponse(code = 500, message = "ERROR", response = String.class) })
-
-	public String updateEsField(@PathParam("type") String type, @PathParam("id") String id,
-			@ApiParam(name = "content") String content) {
-
-		String response = null;
-
-		try {
-			response = elasticSearchService.esUpdate(type, id, content);
-			return response;
-		} catch (Exception e) {
-			throw new WebApplicationException(
-					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
-		}
-	}
-
 	@DELETE
 	@Path(ApiConstants.DATA + "/{index}/{type}/{documentId}")
 	@Produces(MediaType.APPLICATION_JSON)

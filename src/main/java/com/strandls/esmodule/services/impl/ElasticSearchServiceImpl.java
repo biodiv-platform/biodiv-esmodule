@@ -255,15 +255,6 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		return new MapQueryResponse(queryStatus, failureReason);
 	}
 
-	@Override
-	public String esUpdate(String type, String id, String content) throws IOException {
-
-		// Field: Create an UpdateRequest"
-		UpdateRequest updateRequest = new UpdateRequest(type, id).doc(content, XContentType.JSON);
-		UpdateResponse updateResponse = client.update(updateRequest, RequestOptions.DEFAULT);
-		return updateResponse.toString();
-	}
-
 	/*
 	 * (non-Javadoc)
 	 * 
