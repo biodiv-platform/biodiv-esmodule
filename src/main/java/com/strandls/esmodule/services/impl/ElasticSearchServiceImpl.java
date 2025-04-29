@@ -1397,7 +1397,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		SearchRequest searchRequest = new SearchRequest(index);
 		SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-		searchSourceBuilder.size(10);
+		searchSourceBuilder.size(100);
 		BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
 
 		// Add must_not nested query if userGroupId is provided
