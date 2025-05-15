@@ -62,6 +62,7 @@ import org.elasticsearch.search.aggregations.BucketOrder;
 import org.elasticsearch.search.aggregations.PipelineAggregatorBuilders;
 import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregation;
 import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregationBuilder;
+import org.elasticsearch.search.aggregations.bucket.composite.ParsedComposite;
 import org.elasticsearch.search.aggregations.bucket.composite.TermsValuesSourceBuilder;
 import org.elasticsearch.search.aggregations.bucket.filter.Filter;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGrid;
@@ -1735,8 +1736,13 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 					.field("user_group_observations.ug_filter.keyword").size(100).order(BucketOrder.count(false));
 			AggregationBuilder stateAggregation = AggregationBuilders.terms("state")
 					.field("location_information.state.keyword").size(100).order(BucketOrder.key(true));
-			AggregationBuilder traitAggregation = AggregationBuilders.terms("trait")
-					.field("facts.trait_value.trait_filter.keyword").size(1000).order(BucketOrder.key(true));
+			AggregationBuilder traitAggregation = AggregationBuilders
+					.composite("trait",
+							Arrays.asList(
+									new TermsValuesSourceBuilder("trait_filter")
+											.field("facts.trait_value.trait_filter.keyword"),
+									new TermsValuesSourceBuilder("value").field("facts.trait_value.trait_value_id")))
+					.size(1000);
 			AggregationBuilder cfAggregation = AggregationBuilders.terms("customField")
 					.field("custom_fields.custom_field.custom_field_values.custom_field_filter.keyword").size(1000)
 					.order(BucketOrder.key(true));
@@ -1801,30 +1807,30 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		return userGroup;
 	}
 
-	private List<Traits> getTraits(Terms terms) {
+	private List<Traits> getTraits(ParsedComposite demoAgg) {
 		Map<Long, Traits> traitMap = new TreeMap<Long, Traits>();
 		List<Traits> traits = new ArrayList<Traits>();
-		for (Terms.Bucket b : terms.getBuckets()) {
-			String[] traitArray = b.getKeyAsString().split("\\|");
-//			pattern = traitID | traitName | traitType | traitValue | TraitValueIconURL
+		for (CompositeAggregation.Bucket bucket : demoAgg.getBuckets()) {
+			Object traitFilter = bucket.getKey().get("trait_filter");
+			if (traitFilter != null) {
+				String[] traitArray = traitFilter.toString().split("\\|");
+				if (traitMap.containsKey(Long.parseLong(traitArray[0]))) {
+					Traits traitMapped = traitMap.get(Long.parseLong(traitArray[0]));
+					List<TraitValue> valueList = traitMapped.getTraitValues();
+					String capitalizeWord = toTitleCase(traitArray[3]);
+					valueList.add(new TraitValue(capitalizeWord + "|" + bucket.getKey().get("value"), traitArray[4]));
+					traitMapped.setTraitValues(valueList);
+					traitMap.put(Long.parseLong(traitArray[0]), traitMapped);
+				} else {
+					List<TraitValue> valueList = new ArrayList<TraitValue>();
+					String capitalizeWord = toTitleCase(traitArray[3]);
+					valueList.add(new TraitValue(capitalizeWord + "|" + bucket.getKey().get("value"), traitArray[4]));
+					Traits traitsMapped = new Traits(Long.parseLong(traitArray[0]), traitArray[1], traitArray[2],
+							valueList);
 
-			if (traitMap.containsKey(Long.parseLong(traitArray[0]))) {
-				Traits traitMapped = traitMap.get(Long.parseLong(traitArray[0]));
-				List<TraitValue> valueList = traitMapped.getTraitValues();
-				String capitalizeWord = toTitleCase(traitArray[3]);
-				valueList.add(new TraitValue(capitalizeWord, traitArray[4]));
-				traitMapped.setTraitValues(valueList);
-				traitMap.put(Long.parseLong(traitArray[0]), traitMapped);
-			} else {
-				List<TraitValue> valueList = new ArrayList<TraitValue>();
-				String capitalizeWord = toTitleCase(traitArray[3]);
-				valueList.add(new TraitValue(capitalizeWord, traitArray[4]));
-				Traits traitsMapped = new Traits(Long.parseLong(traitArray[0]), traitArray[1], traitArray[2],
-						valueList);
-
-				traitMap.put(Long.parseLong(traitArray[0]), traitsMapped);
+					traitMap.put(Long.parseLong(traitArray[0]), traitsMapped);
+				}
 			}
-
 		}
 		for (java.util.Map.Entry<Long, Traits> entry : traitMap.entrySet()) {
 			traits.add(entry.getValue());
