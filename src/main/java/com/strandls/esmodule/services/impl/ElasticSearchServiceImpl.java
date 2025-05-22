@@ -1811,13 +1811,11 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			if (traitMap.containsKey(Long.parseLong(traitArray[0]))) {
 				Traits traitMapped = traitMap.get(Long.parseLong(traitArray[0]));
 				List<TraitValue> valueList = traitMapped.getTraitValues();
-				String capitalizeWord = toTitleCase(traitArray[3]);
 				valueList.add(new TraitValue(traitArray[3], traitArray[4]));
 				traitMapped.setTraitValues(valueList);
 				traitMap.put(Long.parseLong(traitArray[0]), traitMapped);
 			} else {
 				List<TraitValue> valueList = new ArrayList<TraitValue>();
-				String capitalizeWord = toTitleCase(traitArray[3]);
 				valueList.add(new TraitValue(traitArray[3], traitArray[4]));
 				Traits traitsMapped = new Traits(Long.parseLong(traitArray[0]), traitArray[1], traitArray[2],
 						valueList);
