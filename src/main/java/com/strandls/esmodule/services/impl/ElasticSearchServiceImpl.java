@@ -663,10 +663,16 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		AggregationBuilder aggregation = null;
 
-		if (filter.equals(Constants.MVR_SCIENTIFIC_NAME)) {
-			aggregation = AggregationBuilders.terms(filter).field(filter).size(50000);
-		} else if (filter.equals(Constants.AUTHOR_ID) || filter.equals(Constants.IDENTIFIER_ID)) {
-			aggregation = AggregationBuilders.terms(filter).field(filter).size(20000).order(BucketOrder.count(false));
+		if (filter.split("\\|")[0].equals(Constants.MVR_SCIENTIFIC_NAME)) {
+			aggregation = AggregationBuilders.terms(filter.split("\\|")[0]).field(filter.split("\\|")[0])
+					.size(Integer.parseInt(filter.split("\\|")[1]) == 0 ? 50000
+							: Integer.parseInt(filter.split("\\|")[1]) + 10);
+		} else if (filter.split("\\|")[0].equals(Constants.AUTHOR_ID)
+				|| filter.split("\\|")[0].equals(Constants.IDENTIFIER_ID)) {
+			aggregation = AggregationBuilders.terms(filter.split("\\|")[0]).field(filter.split("\\|")[0])
+					.size(Integer.parseInt(filter.split("\\|")[1]) == 0 ? 20000
+							: Integer.parseInt(filter.split("\\|")[1]) + 10)
+					.order(BucketOrder.count(false));
 		} else if (filter.contains("nested")) {
 			String nestedFiled = filter.split("\\.")[1];
 			String nestedFilter = filter.replace("nested.", "");
@@ -716,7 +722,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			aggregationResponse.setGroupAggregation(t);
 
 		} else {
-			aggregationResponse = groupAggregation(index, aggregation, masterBoolQuery, filter);
+			aggregationResponse = groupAggregation(index, aggregation, masterBoolQuery, filter.split("\\|")[0]);
 
 		}
 		return aggregationResponse;
@@ -943,6 +949,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
 		if (query != null)
 			sourceBuilder.query(query);
+		sourceBuilder.size(0);
 		sourceBuilder.aggregation(aggQuery);
 
 		SearchRequest request = new SearchRequest(index);
