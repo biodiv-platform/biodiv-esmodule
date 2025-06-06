@@ -943,6 +943,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
 		if (query != null)
 			sourceBuilder.query(query);
+		sourceBuilder.size(0);
 		sourceBuilder.aggregation(aggQuery);
 
 		SearchRequest request = new SearchRequest(index);
