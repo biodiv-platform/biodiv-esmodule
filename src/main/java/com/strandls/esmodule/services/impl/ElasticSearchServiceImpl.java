@@ -681,7 +681,6 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 					.calendarInterval(DateHistogramInterval.days(1)).format("yyyy-MM-dd");
 		} else if (filter.split("\\|")[0].equals("min")) {
 			aggregation = AggregationBuilders.min("min_date").field(filter.split("\\|")[1]).format("YYYY");
-		    //MaxAggregationBuilder maxAgg = AggregationBuilders.max("max_date").field("created_on");
 		    
 		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
 			aggregation = AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("from_date")
@@ -1051,34 +1050,6 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			for (Terms.Bucket entry : termsHistogram.getBuckets()) {
 				groupMonth.put(entry.getKeyAsString(), entry.getDocCount());
 			}
-			/*
-			 * CompositeAggregationBuilder taxon_aggregation = AggregationBuilders
-			 * .composite("NAME", List.of(new
-			 * TermsValuesSourceBuilder("path").field("path.keyword"))) .size(200);
-			 * TermsAggregationBuilder subAggregation =
-			 * AggregationBuilders.terms("raw_name")
-			 * .field("italicised_form.keyword").size(10);
-			 * taxon_aggregation.subAggregation(subAggregation); QueryBuilder taxon_query =
-			 * QueryBuilders.regexpQuery("path.keyword", "(^|.*\\.)1\\.[0-9]+");
-			 * SearchSourceBuilder taxonsourceBuilder = new
-			 * SearchSourceBuilder().size(0).query(taxon_query);
-			 * taxonsourceBuilder.aggregation(taxon_aggregation);
-			 * 
-			 * SearchRequest taxon_request = new SearchRequest("extended_taxon_definition");
-			 * taxon_request.source(taxonsourceBuilder); SearchResponse taxon_response =
-			 * null; try { taxon_response = client.search(taxon_request,
-			 * RequestOptions.DEFAULT); } catch (IOException e) { // TODO Auto-generated
-			 * catch block logger.error(e.getMessage()); } CompositeAggregation taxonagg =
-			 * taxon_response.getAggregations().get("NAME"); List<? extends
-			 * CompositeAggregation.Bucket> taxonbuckets = taxonagg.getBuckets(); for
-			 * (CompositeAggregation.Bucket bucket : taxonbuckets) { String[] parts =
-			 * bucket.getKey().get("path").toString().split("\\.");
-			 * System.out.println(bucket.getKeyAsString()); Long value =
-			 * fromMonth.get(parts[parts.length - 1]); if (value != null) { Terms
-			 * bucket_name = bucket.getAggregations().get("raw_name"); for (Terms.Bucket n :
-			 * bucket_name.getBuckets()) { groupMonth.put(n.getKeyAsString() + '|' +
-			 * bucket.getKey().get("path"), value); } } }
-			 */
 		} else if (filter.split("\\|")[0].equals("taxon_path")) {
 			Terms termsHistogram = response.getAggregations().get("NAME");
 			for (Terms.Bucket entry : termsHistogram.getBuckets()) {
@@ -1087,7 +1058,6 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 					groupMonth.put(n.getKeyAsString() + '|' + entry.getKey(), (long) 0);
 				}
 			}
-			System.out.println(groupMonth);
 		} else {
 			Terms frommonth = response.getAggregations().get(filter);
 
