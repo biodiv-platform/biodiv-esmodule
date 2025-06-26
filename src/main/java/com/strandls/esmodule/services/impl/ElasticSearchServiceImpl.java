@@ -681,7 +681,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 					.calendarInterval(DateHistogramInterval.days(1)).format("yyyy-MM-dd");
 		} else if (filter.split("\\|")[0].equals("min")) {
 			aggregation = AggregationBuilders.min("min_date").field(filter.split("\\|")[1]).format("YYYY");
-		    
+
 		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
 			aggregation = AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("from_date")
 					.calendarInterval(DateHistogramInterval.MONTH).format("yyyy-MMM");
@@ -957,12 +957,24 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
 		if (query != null)
 			if (filter.split("\\|")[0].equals("taxon_path")) {
-				QueryBuilder taxon_query = QueryBuilders.regexpQuery("path.keyword", filter.split("\\|").length>1?filter.split("\\|")[1]+"\\.[0-9]+":"[0-9]+(\\.[0-9]+)?");
-				sourceBuilder.query(taxon_query);
+				String[] parts = filter.split("\\|");
+				String taxonPathRegex;
+
+				if (parts.length > 1 && !parts[1].isEmpty()) {
+					// Match child nodes (e.g., "123.456.789")
+					taxonPathRegex = parts[1] + "\\.[0-9]+";
+				} else {
+					// Match full path (e.g., "123" or "123.456")
+					taxonPathRegex = "[0-9]+(\\.[0-9]+)?";
+				}
+
+				QueryBuilder taxonQuery = QueryBuilders.regexpQuery("path.keyword", taxonPathRegex);
+				sourceBuilder.query(taxonQuery);
 			} else {
 				sourceBuilder.query(query);
-				if(filter.split("\\|")[0].equals("min")) {
-					MaxAggregationBuilder maxAgg = AggregationBuilders.max("max_date").field(filter.split("\\|")[1]).format("YYYY");
+				if (filter.split("\\|")[0].equals("min")) {
+					MaxAggregationBuilder maxAgg = AggregationBuilders.max("max_date").field(filter.split("\\|")[1])
+							.format("YYYY");
 					sourceBuilder.aggregation(maxAgg);
 				}
 			}
@@ -1024,7 +1036,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			Max maxAgg = aggregations.get("max_date");
 			groupMonth.put(minAgg.getValueAsString(), (long) 0);
 			groupMonth.put(maxAgg.getValueAsString(), (long) 0);
-			
+
 		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
 			Histogram dateHistogram = response.getAggregations().get(Constants.TEMPORAL_AGG);
 
