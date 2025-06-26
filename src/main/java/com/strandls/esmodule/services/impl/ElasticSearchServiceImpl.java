@@ -74,6 +74,10 @@ import org.elasticsearch.search.aggregations.bucket.nested.Nested;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms.Bucket;
 import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.Max;
+import org.elasticsearch.search.aggregations.metrics.MaxAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.Min;
+import org.elasticsearch.search.aggregations.metrics.MinAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.BucketScriptPipelineAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.BucketSortPipelineAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.ParsedSimpleValue;
@@ -675,6 +679,9 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		} else if (filter.equals(Constants.GROUP_BY_DAY)) {
 			aggregation = AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("created_on")
 					.calendarInterval(DateHistogramInterval.days(1)).format("yyyy-MM-dd");
+		} else if (filter.split("\\|")[0].equals("min")) {
+			aggregation = AggregationBuilders.min("min_date").field(filter.split("\\|")[1]).format("YYYY");
+
 		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
 			aggregation = AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("from_date")
 					.calendarInterval(DateHistogramInterval.MONTH).format("yyyy-MMM");
@@ -687,6 +694,13 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		} else if (filter.equals(Constants.GROUP_BY_TAXON)) {
 			aggregation = AggregationBuilders.terms("taxon_agg").field("max_voted_reco.hierarchy.taxon_id")
 					.size(500000);
+		} else if (filter.split("\\|")[0].equals("taxon_path")) {
+			TermsAggregationBuilder taxonAggregation = AggregationBuilders.terms("NAME") // same name as before
+					.field("path.keyword").size(200); // same size
+
+			TermsAggregationBuilder subAggregation = AggregationBuilders.terms("raw_name")
+					.field("italicised_form.keyword").size(10);
+			aggregation = taxonAggregation.subAggregation(subAggregation);
 		} else {
 			aggregation = AggregationBuilders.terms(filter).field(filter).size(1000);
 		}
@@ -942,10 +956,35 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
 		if (query != null)
-			sourceBuilder.query(query);
+			if (filter.split("\\|")[0].equals("taxon_path")) {
+				String[] parts = filter.split("\\|");
+				String taxonPathRegex;
+
+				if (parts.length > 1 && !parts[1].isEmpty()) {
+					// Match child nodes (e.g., "123.456.789")
+					taxonPathRegex = parts[1] + "\\.[0-9]+";
+				} else {
+					// Match full path (e.g., "123" or "123.456")
+					taxonPathRegex = "[0-9]+(\\.[0-9]+)?";
+				}
+
+				QueryBuilder taxonQuery = QueryBuilders.regexpQuery("path.keyword", taxonPathRegex);
+				sourceBuilder.query(taxonQuery);
+			} else {
+				sourceBuilder.query(query);
+				if (filter.split("\\|")[0].equals("min")) {
+					MaxAggregationBuilder maxAgg = AggregationBuilders.max("max_date").field(filter.split("\\|")[1])
+							.format("YYYY");
+					sourceBuilder.aggregation(maxAgg);
+				}
+			}
+		sourceBuilder.size(0);
 		sourceBuilder.aggregation(aggQuery);
 
 		SearchRequest request = new SearchRequest(index);
+		if (filter.split("\\|")[0].equals("taxon_path")) {
+			request = new SearchRequest("extended_taxon_definition");
+		}
 		request.source(sourceBuilder);
 		SearchResponse response = null;
 		try {
@@ -990,6 +1029,14 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
 				groupMonth.put(entry.getKeyAsString(), entry.getDocCount());
 			}
+
+		} else if (filter.split("\\|")[0].equals("min")) {
+			Aggregations aggregations = response.getAggregations();
+			Min minAgg = aggregations.get("min_date");
+			Max maxAgg = aggregations.get("max_date");
+			groupMonth.put(minAgg.getValueAsString(), (long) 0);
+			groupMonth.put(maxAgg.getValueAsString(), (long) 0);
+
 		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
 			Histogram dateHistogram = response.getAggregations().get(Constants.TEMPORAL_AGG);
 
@@ -1012,52 +1059,22 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			}
 		} else if (filter.equals(Constants.GROUP_BY_TAXON)) {
 			Terms termsHistogram = response.getAggregations().get("taxon_agg");
-			Map<String, Long> fromMonth = new LinkedHashMap<>();
 			for (Terms.Bucket entry : termsHistogram.getBuckets()) {
-				fromMonth.put(entry.getKeyAsString(), entry.getDocCount());
+				groupMonth.put(entry.getKeyAsString(), entry.getDocCount());
 			}
-			Map<String, Object> afterKey = new HashMap<>();
-			afterKey.put("path", "1");
-			while (afterKey != null) {
-				CompositeAggregationBuilder taxon_aggregation = AggregationBuilders
-						.composite("NAME", List.of(new TermsValuesSourceBuilder("path").field("path.keyword")))
-						.size(10000);
-				if (afterKey != null) {
-					taxon_aggregation.aggregateAfter(afterKey);
+		} else if (filter.split("\\|")[0].equals("taxon_path")) {
+			Terms termsHistogram = response.getAggregations().get("NAME");
+			for (Terms.Bucket entry : termsHistogram.getBuckets()) {
+				Terms bucket_name = entry.getAggregations().get("raw_name");
+				for (Terms.Bucket n : bucket_name.getBuckets()) {
+					groupMonth.put(n.getKeyAsString() + '|' + entry.getKey(), (long) 0);
 				}
-				TermsAggregationBuilder subAggregation = AggregationBuilders.terms("raw_name")
-						.field("italicised_form.keyword").size(10);
-				taxon_aggregation.subAggregation(subAggregation);
-				SearchSourceBuilder taxonsourceBuilder = new SearchSourceBuilder();
-				taxonsourceBuilder.aggregation(taxon_aggregation);
-
-				SearchRequest taxon_request = new SearchRequest("extended_taxon_definition");
-				taxon_request.source(taxonsourceBuilder);
-				SearchResponse taxon_response = null;
-				try {
-					taxon_response = client.search(taxon_request, RequestOptions.DEFAULT);
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					logger.error(e.getMessage());
-				}
-				CompositeAggregation taxonagg = taxon_response.getAggregations().get("NAME");
-				List<? extends CompositeAggregation.Bucket> taxonbuckets = taxonagg.getBuckets();
-				for (CompositeAggregation.Bucket bucket : taxonbuckets) {
-					String[] parts = bucket.getKey().get("path").toString().split("\\.");
-					Long value = fromMonth.get(parts[parts.length - 1]);
-					if (value != null) {
-						Terms bucket_name = bucket.getAggregations().get("raw_name");
-						for (Terms.Bucket n : bucket_name.getBuckets()) {
-							groupMonth.put(n.getKeyAsString() + '|' + bucket.getKey().get("path"), value);
-						}
-					}
-				}
-				afterKey = taxonagg.afterKey();
 			}
 		} else {
 			Terms frommonth = response.getAggregations().get(filter);
 
 			for (Terms.Bucket entry : frommonth.getBuckets()) {
+
 				groupMonth.put(entry.getKey(), entry.getDocCount());
 			}
 		}
