@@ -14,8 +14,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import javax.inject.Inject;
-
 import org.apache.lucene.search.join.ScoreMode;
 import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.elasticsearch.action.bulk.BulkRequest;
@@ -60,9 +58,6 @@ import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.BucketOrder;
 import org.elasticsearch.search.aggregations.PipelineAggregatorBuilders;
-import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregation;
-import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.composite.TermsValuesSourceBuilder;
 import org.elasticsearch.search.aggregations.bucket.filter.Filter;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGrid;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGridAggregationBuilder;
@@ -77,7 +72,6 @@ import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilde
 import org.elasticsearch.search.aggregations.metrics.Max;
 import org.elasticsearch.search.aggregations.metrics.MaxAggregationBuilder;
 import org.elasticsearch.search.aggregations.metrics.Min;
-import org.elasticsearch.search.aggregations.metrics.MinAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.BucketScriptPipelineAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.BucketSortPipelineAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.ParsedSimpleValue;
@@ -136,9 +130,11 @@ import com.strandls.esmodule.models.query.MapRangeQuery;
 import com.strandls.esmodule.models.query.MapSearchQuery;
 import com.strandls.esmodule.services.ElasticSearchService;
 
+import jakarta.inject.Inject;
+
 /**
  * Implementation of {@link ElasticSearchService}
- * 
+ *
  * @author mukund
  *
  */
@@ -161,7 +157,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticSearchService#create(java.lang.
 	 * String, java.lang.String, java.lang.String, java.lang.String)
@@ -201,7 +197,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticSearchService#fetch(java.lang.
 	 * String, java.lang.String, java.lang.String)
@@ -225,7 +221,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticSearchService#update(java.lang.
 	 * String, java.lang.String, java.lang.String, java.lang.String)
@@ -261,7 +257,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticSearchService#delete(java.lang.
 	 * String, java.lang.String, java.lang.String)
@@ -316,7 +312,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticSearchService#bulkUpload(java.lang
 	 * .String, java.lang.String, java.lang.String)
@@ -474,7 +470,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			builder.endObject();
 			String result2 = Strings.toString(builder);
 			aggregationString = result2;
-//			aggregationString = XContentHelper.convertToJson(builder, reformatJson)
+			// aggregationString = XContentHelper.convertToJson(builder, reformatJson)
 			logger.info("Aggregation search: {} completed", aggregation.getName());
 
 		}
@@ -485,7 +481,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticSearchService#termSearch(java.lang
 	 * .String, java.lang.String, java.lang.String, java.lang.String,
@@ -514,7 +510,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticSearchService#boolSearch(java.lang
 	 * .String, java.lang.String, java.util.List,
@@ -540,7 +536,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticSearchService#rangeSearch(java.
 	 * lang.String, java.lang.String, java.util.List,
@@ -819,7 +815,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticSearchService#search(java.lang.
 	 * String, java.lang.String, com.strandls.naksha.es.models.query.MapSearchQuery,
@@ -871,7 +867,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticSearchService#geohashAggregation(
 	 * java.lang.String, java.lang.String, java.lang.String, java.lang.Integer)
@@ -890,7 +886,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticSearchService#termsAggregation(
 	 * java.lang.String, java.lang.String, java.lang.String, java.lang.String,
@@ -1300,7 +1296,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		try {
 			searchSourceBuilder.query(boolQueryBuilder);
 			searchRequest.source(searchSourceBuilder);
-//			searchResponse = client.search(searchRequest); DEPRECATED
+			// searchResponse = client.search(searchRequest); DEPRECATED
 			searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
 		} catch (Exception e) {
 			logger.error(e.getMessage());
@@ -1795,7 +1791,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	private List<SpeciesGroup> getAggregationSpeciesGroup(Terms terms) {
 		List<SpeciesGroup> sGroup = new ArrayList<SpeciesGroup>();
 		for (Terms.Bucket b : terms.getBuckets()) {
-//			pattern = sgroupId | sgroupName | sGroupOrder
+			// pattern = sgroupId | sgroupName | sGroupOrder
 			String[] sGroupArray = b.getKeyAsString().split("\\|");
 			sGroup.add(
 					new SpeciesGroup(Long.parseLong(sGroupArray[0]), sGroupArray[1], Integer.parseInt(sGroupArray[2])));
@@ -1806,7 +1802,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	private List<UserGroup> getAggregationUserGroup(Terms terms) {
 		List<UserGroup> userGroup = new ArrayList<UserGroup>();
 		for (Terms.Bucket b : terms.getBuckets()) {
-//			pattern = usergroupId | userGroupName |domain name | webaddress
+			// pattern = usergroupId | userGroupName |domain name | webaddress
 			String[] ugArray = b.getKeyAsString().split("\\|");
 			String webAddress = "";
 			if (ugArray[2].length() != 0)
@@ -1823,7 +1819,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		List<Traits> traits = new ArrayList<Traits>();
 		for (Terms.Bucket b : terms.getBuckets()) {
 			String[] traitArray = b.getKeyAsString().split("\\|");
-//			pattern = traitID | traitName | traitType | traitValue | TraitValueIconURL
+			// pattern = traitID | traitName | traitType | traitValue | TraitValueIconURL
 
 			if (traitMap.containsKey(Long.parseLong(traitArray[0]))) {
 				Traits traitMapped = traitMap.get(Long.parseLong(traitArray[0]));
@@ -1871,7 +1867,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		for (Terms.Bucket b : terms.getBuckets()) {
 			String[] customFieldArray = b.getKeyAsString().split("\\|");
-//			pattern  = cfId | cfName | cfFieldType | cfDataType | cfValueIcon |cfValue
+			// pattern = cfId | cfName | cfFieldType | cfDataType | cfValueIcon |cfValue
 
 			if (customFieldMap.containsKey(Long.parseLong(customFieldArray[0]))) {
 

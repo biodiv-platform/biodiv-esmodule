@@ -2,7 +2,7 @@ package com.strandls.esmodule.models;
 
 /**
  * Search parameters for map query
- * 
+ *
  * @author mukund
  *
  */
@@ -29,7 +29,8 @@ public class MapSearchParams {
 	 */
 	private MapBoundParams mapBoundParams;
 
-    public MapSearchParams() {}
+	public MapSearchParams() {
+	}
 
 	public MapSearchParams(Integer from, Integer limit, String sortOn, MapSortType sortType) {
 		super();
@@ -39,7 +40,8 @@ public class MapSearchParams {
 		this.sortType = sortType;
 	}
 
-	public MapSearchParams(Integer from, Integer limit, String sortOn, MapSortType sortType, MapBoundParams mapBoundParams) {
+	public MapSearchParams(Integer from, Integer limit, String sortOn, MapSortType sortType,
+			MapBoundParams mapBoundParams) {
 		super();
 		this.from = from;
 		this.limit = limit;
@@ -93,5 +95,5 @@ public class MapSearchParams {
 		return "MapSearchParams [from=" + from + ", limit=" + limit + ", sortOn=" + sortOn + ", sortType=" + sortType
 				+ ", mapBoundParams=" + mapBoundParams + "]";
 	}
-	
+
 }

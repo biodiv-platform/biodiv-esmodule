@@ -2,7 +2,7 @@ package com.strandls.esmodule.binning.models;
 
 /**
  * A geometry in {@link Geojson}
- * 
+ *
  * @author mukund
  *
  */

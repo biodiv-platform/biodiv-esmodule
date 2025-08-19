@@ -2,7 +2,7 @@ package com.strandls.esmodule.models;
 
 /**
  * A single unit of user data used for the communication with the app.
- * 
+ *
  * @author mukund
  */
 public class MapDocument {

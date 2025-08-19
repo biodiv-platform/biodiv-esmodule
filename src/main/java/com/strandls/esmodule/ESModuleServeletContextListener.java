@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.servlet.ServletContextEvent;
-
 import org.apache.http.HttpHost;
 import org.elasticsearch.client.RestClient;
 import org.glassfish.jersey.servlet.ServletContainer;
@@ -23,6 +21,8 @@ import com.strandls.esmodule.binning.servicesImpl.BinningModule;
 import com.strandls.esmodule.controllers.ESControllerModule;
 import com.strandls.esmodule.services.impl.ESServiceImplModule;
 import com.strandls.esmodule.utils.UtilityMethods;
+
+import jakarta.servlet.ServletContextEvent;
 
 /**
  * @author Abhishek Rudra
@@ -49,10 +49,10 @@ public class ESModuleServeletContextListener extends GuiceServletContextListener
 				bind(UtilityMethods.class).in(Scopes.SINGLETON);
 
 				Map<String, String> props = new HashMap<String, String>();
-				props.put("javax.ws.rs.Application", ApplicationConfig.class.getName());
+				props.put("jakarta.ws.rs.Application", ApplicationConfig.class.getName());
 				props.put("jersey.config.server.provider.packages", "com");
 				props.put("jersey.config.server.wadl.disableWadl", "true");
-				
+
 				bind(ServletContainer.class).in(Scopes.SINGLETON);
 
 				serve("/api/*").with(ServletContainer.class, props);

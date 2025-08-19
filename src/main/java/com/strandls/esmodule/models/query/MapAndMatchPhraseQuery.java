@@ -2,6 +2,7 @@ package com.strandls.esmodule.models.query;
 
 /**
  * There is "AND" between any two instances of this query.
+ *
  * @author mukund
  *
  */

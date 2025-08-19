@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package com.strandls.esmodule.models;
 
@@ -14,7 +14,7 @@ public class UserGroup {
 	private String webAddress;
 
 	/**
-	 * 
+	 *
 	 */
 	public UserGroup() {
 		super();

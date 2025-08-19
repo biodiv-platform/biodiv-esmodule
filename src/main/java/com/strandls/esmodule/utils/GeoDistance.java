@@ -2,13 +2,14 @@ package com.strandls.esmodule.utils;
 
 /**
  * Calculates distance between two lat long coordinate points
- * 
+ *
  * @author mukund
  *
  */
 public class GeoDistance {
-	
-	private GeoDistance() {}
+
+	private GeoDistance() {
+	}
 
 	public static double distance(double fromLong, double fromLat, double toLong, double toLat) {
 

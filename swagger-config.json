@@ -1,14 +1,13 @@
 {
-  "modelPackage": "com.strandls.esmodule.pojo",
-  "apiPackage": "com.strandls.esmodule.controllers",
-  "invokerPackage": "com.strandls.esmodule",
-  "groupId": "com.strandls.biodiv",
-  "artifactId": "esmodule-client",
-  "artifactVersion": "1.0.0",
-  "fullJavaUtil": true,
-  "dateLibrary": "legacy",
-  "library": "jersey2",
-  "developerName": "Abhishek Kumar Rudra",
-  "developerEmail": "abhishek.rudra@strandls.com",
-  "java8": true
+	"modelPackage": "com.strandls.esmodule.pojo",
+	"apiPackage": "com.strandls.esmodule.controllers",
+	"invokerPackage": "com.strandls.esmodule",
+	"groupId": "com.strandls.biodiv",
+	"artifactId": "esmodule-client",
+	"artifactVersion": "0.0.21",
+	"fullJavaUtil": true,
+	"dateLibrary": "legacy",
+	"library": "jersey3",
+	"developerName": "Abhishek Kumar Rudra",
+	"developerEmail": "abhishek.rudra@strandls.com"
 }

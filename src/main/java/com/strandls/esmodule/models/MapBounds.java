@@ -2,20 +2,22 @@ package com.strandls.esmodule.models;
 
 /**
  * Bounds for a map in coordinate system
+ *
  * @author mukund
  *
  */
 public class MapBounds {
 
 	private double top;
-	
+
 	private double left;
-	
+
 	private double bottom;
-	
+
 	private double right;
 
-	public MapBounds() {}
+	public MapBounds() {
+	}
 
 	public MapBounds(double top, double left, double bottom, double right) {
 		super();

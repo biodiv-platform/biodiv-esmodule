@@ -5,7 +5,7 @@ import com.google.inject.Scopes;
 
 /**
  * Guice binding module
- * 
+ *
  * @author mukund
  *
  */

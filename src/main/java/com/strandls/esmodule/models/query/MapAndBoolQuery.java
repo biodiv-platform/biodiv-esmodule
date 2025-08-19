@@ -4,6 +4,7 @@ import java.util.List;
 
 /**
  * There is "AND" between any two instances of this query.
+ *
  * @author mukund
  *
  */

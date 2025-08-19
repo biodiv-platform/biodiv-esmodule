@@ -1,12 +1,6 @@
 package com.strandls.esmodule.services.impl;
 
-import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.Arrays;
-
-import javax.inject.Inject;
 
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
@@ -24,9 +18,11 @@ import com.strandls.esmodule.models.MapQueryResponse;
 import com.strandls.esmodule.models.MapQueryStatus;
 import com.strandls.esmodule.services.ElasticAdminSearchService;
 
+import jakarta.inject.Inject;
+
 /**
  * Implementation of {@link ElasticAdminSearchService}
- * 
+ *
  * @author mukund
  *
  */
@@ -43,14 +39,14 @@ public class ElasticAdminSearchServiceImpl implements ElasticAdminSearchService 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticAdminSearchService#postMapping(
 	 * java.lang.String, java.lang.String, java.lang.String)
 	 */
 	@Override
 	public MapQueryResponse postMapping(String index, String mapping) throws IOException {
-		String indexParam=index.replaceAll("[\n\r\t]", "_");
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
 		logger.info("Trying to add mapping to index: {}", indexParam);
 
 		StringEntity entity = null;
@@ -70,16 +66,16 @@ public class ElasticAdminSearchServiceImpl implements ElasticAdminSearchService 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticAdminSearchService#getMapping(java
 	 * .lang.String)
 	 */
 	@Override
 	public MapDocument getMapping(String index) throws IOException {
-		String indexParam=index.replaceAll("[\n\r\t]", "_");
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
 		logger.info("Trying to get mapping for index: {}", indexParam);
-		
+
 		Request request = new Request("GET", index + "/_mapping");
 		Response response = client.performRequest(request);
 		String status = response.getStatusLine().getReasonPhrase();
@@ -91,14 +87,14 @@ public class ElasticAdminSearchServiceImpl implements ElasticAdminSearchService 
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * com.strandls.naksha.es.services.api.ElasticAdminSearchService#createIndex(
 	 * java.lang.String, java.lang.String)
 	 */
 	@Override
 	public MapQueryResponse createIndex(String index, String type) throws IOException {
-		String indexParam=index.replaceAll("[\n\r\t]", "_");
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
 		logger.info("Trying to create index: {}", indexParam);
 
 		Request request = new Request("PUT", "/" + index);
@@ -128,5 +124,4 @@ public class ElasticAdminSearchServiceImpl implements ElasticAdminSearchService 
 		return new MapQueryResponse(MapQueryStatus.UNKNOWN, status);
 	}
 
-	
 }

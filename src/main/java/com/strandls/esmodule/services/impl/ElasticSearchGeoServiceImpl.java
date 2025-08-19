@@ -6,8 +6,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.inject.Inject;
-
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.RequestOptions;
@@ -35,9 +33,11 @@ import com.strandls.esmodule.models.MapDocument;
 import com.strandls.esmodule.models.MapResponse;
 import com.strandls.esmodule.services.ElasticSearchGeoService;
 
+import jakarta.inject.Inject;
+
 /**
  * Implementation of {@link ElasticSearchGeoService}
- * 
+ *
  * @author mukund
  *
  */
@@ -74,7 +74,7 @@ public class ElasticSearchGeoServiceImpl implements ElasticSearchGeoService {
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see com.strandls.naksha.es.services.api.ElasticSearchGeoService#
 	 * getGeoWithinDocuments(java.lang.String, java.lang.String, java.lang.String,
 	 * double, double, double, double)

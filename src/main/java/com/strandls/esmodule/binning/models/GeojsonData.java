@@ -2,7 +2,7 @@ package com.strandls.esmodule.binning.models;
 
 /**
  * A wrapper around {@link Geojson} with max and min counts of property value
- * 
+ *
  * @author mukund
  *
  */

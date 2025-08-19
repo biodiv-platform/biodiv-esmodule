@@ -2,7 +2,7 @@ package com.strandls.esmodule.models;
 
 /**
  * Statuses that can be returned by map app
- * 
+ *
  * @author mukund
  */
 public enum MapQueryStatus {

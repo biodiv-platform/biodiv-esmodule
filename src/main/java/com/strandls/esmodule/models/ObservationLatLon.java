@@ -7,7 +7,7 @@ public class ObservationLatLon {
 	private Double longitude;
 
 	/**
-	 * 
+	 *
 	 */
 	public ObservationLatLon() {
 		super();

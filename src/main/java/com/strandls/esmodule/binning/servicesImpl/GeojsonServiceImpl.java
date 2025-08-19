@@ -6,8 +6,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.inject.Inject;
-
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.RequestOptions;
@@ -23,9 +21,11 @@ import com.strandls.esmodule.binning.models.GeojsonData;
 import com.strandls.esmodule.binning.models.Geometry;
 import com.strandls.esmodule.binning.services.GeojsonService;
 
+import jakarta.inject.Inject;
+
 /**
  * Services for {@link GeojsonData}
- * 
+ *
  * @author mukund
  *
  */

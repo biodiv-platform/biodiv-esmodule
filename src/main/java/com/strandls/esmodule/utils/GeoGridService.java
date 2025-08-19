@@ -2,13 +2,14 @@ package com.strandls.esmodule.utils;
 
 /**
  * Divide an area into various types of grids
- * 
+ *
  * @author mukund
  *
  */
 public class GeoGridService {
-	
-	private GeoGridService() {}
+
+	private GeoGridService() {
+	}
 
 	public static double[][][] squareGrid(double east, double west, double north, double south, double cellSide) {
 

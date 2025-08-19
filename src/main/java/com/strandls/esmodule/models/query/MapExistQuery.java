@@ -2,7 +2,7 @@ package com.strandls.esmodule.models.query;
 
 /**
  * Query of the form that a key exists/not exists with a not null value
- * 
+ *
  * @author mukund
  *
  */
@@ -10,8 +10,9 @@ public class MapExistQuery extends MapQuery {
 
 	private boolean exists;
 
-	public MapExistQuery() {}
-	
+	public MapExistQuery() {
+	}
+
 	public MapExistQuery(String key, boolean exists, String path) {
 		super(key, path);
 		this.exists = exists;

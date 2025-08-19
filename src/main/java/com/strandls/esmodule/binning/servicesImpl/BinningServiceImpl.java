@@ -2,16 +2,16 @@ package com.strandls.esmodule.binning.servicesImpl;
 
 import java.io.IOException;
 
-import javax.inject.Inject;
-
 import com.strandls.esmodule.binning.models.GeojsonData;
 import com.strandls.esmodule.binning.services.BinningService;
 import com.strandls.esmodule.models.MapBounds;
 import com.strandls.esmodule.utils.GeoGridService;
 
+import jakarta.inject.Inject;
+
 /**
  * Bin the geographical data in different shapes and size.
- * 
+ *
  * @author mukund
  *
  */

@@ -2,6 +2,7 @@ package com.strandls.esmodule.models.query;
 
 /**
  * All Map queries extend this class
+ *
  * @author mukund
  *
  */
@@ -12,12 +13,12 @@ public class MapQuery {
 	 */
 	private String key;
 	/**
-	 * The path where this field is present,
-	 * can be <code>null</code>
+	 * The path where this field is present, can be <code>null</code>
 	 */
 	private String path;
-	
-	public MapQuery() {}
+
+	public MapQuery() {
+	}
 
 	public MapQuery(String key, String path) {
 		this.key = key;

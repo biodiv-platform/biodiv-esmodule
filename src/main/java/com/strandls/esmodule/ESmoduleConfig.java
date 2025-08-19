@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Various configurations needed by the web app
- * 
+ *
  * @author mukund
  */
 public class ESmoduleConfig {
@@ -18,8 +18,9 @@ public class ESmoduleConfig {
 	private static Configuration config;
 
 	private static final Logger logger = LoggerFactory.getLogger(ESmoduleConfig.class);
-	
-	private ESmoduleConfig() {}
+
+	private ESmoduleConfig() {
+	}
 
 	static {
 		Configurations configs = new Configurations();

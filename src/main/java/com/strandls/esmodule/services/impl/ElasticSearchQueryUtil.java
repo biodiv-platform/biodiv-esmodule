@@ -428,7 +428,7 @@ public class ElasticSearchQueryUtil {
 		if (isMaxVotedRecoId)
 			masterBoolQueryBuilder = QueryBuilders.matchPhraseQuery("max_voted_reco.id", id);
 		else
-//			taxonomyId
+			// taxonomyId
 			masterBoolQueryBuilder = QueryBuilders.matchPhraseQuery("max_voted_reco.hierarchy.taxon_id", id);
 		return masterBoolQueryBuilder;
 	}

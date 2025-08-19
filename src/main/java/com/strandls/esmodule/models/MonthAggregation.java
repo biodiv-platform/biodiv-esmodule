@@ -1,12 +1,12 @@
 /**
- * 
+ *
  */
 package com.strandls.esmodule.models;
 
 /**
  * @author Rishitha Ravi
  *
- * 
+ *
  */
 public class MonthAggregation {
 

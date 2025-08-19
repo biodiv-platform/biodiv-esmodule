@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package com.strandls.esmodule.models;
 
@@ -17,7 +17,7 @@ public class CustomFields {
 	private List<CustomFieldValues> values;
 
 	/**
-	 * 
+	 *
 	 */
 	public CustomFields() {
 		super();

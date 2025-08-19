@@ -2,6 +2,7 @@ package com.strandls.esmodule.models;
 
 /**
  * Sort types ascending and descending
+ *
  * @author mukund
  *
  */
