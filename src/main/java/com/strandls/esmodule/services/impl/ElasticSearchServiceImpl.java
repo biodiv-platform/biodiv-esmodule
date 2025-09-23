@@ -74,6 +74,8 @@ import org.elasticsearch.search.aggregations.bucket.nested.Nested;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms.Bucket;
 import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.Cardinality;
+import org.elasticsearch.search.aggregations.metrics.CardinalityAggregationBuilder;
 import org.elasticsearch.search.aggregations.metrics.Max;
 import org.elasticsearch.search.aggregations.metrics.MaxAggregationBuilder;
 import org.elasticsearch.search.aggregations.metrics.Min;
@@ -671,6 +673,15 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			aggregation = AggregationBuilders.terms(filter).field(filter).size(50000);
 		} else if (filter.equals(Constants.AUTHOR_ID) || filter.equals(Constants.IDENTIFIER_ID)) {
 			aggregation = AggregationBuilders.terms(filter).field(filter).size(20000).order(BucketOrder.count(false));
+		} else if (filter.split("\\|")[0].equals("uploaders")) {
+			CardinalityAggregationBuilder uniqueScientificNamesAgg = AggregationBuilders
+				    .cardinality("unique_scientific_names_count")
+				    .field("max_voted_reco.scientific_name.keyword");
+			if (filter.split("\\|")[1].equals("species")) {
+				aggregation = AggregationBuilders.terms(Constants.AUTHOR_ID).field(Constants.AUTHOR_ID).size(20000).order(BucketOrder.aggregation("unique_scientific_names_count", false)).subAggregation(uniqueScientificNamesAgg);
+			} else {
+				aggregation = AggregationBuilders.terms(Constants.AUTHOR_ID).field(Constants.AUTHOR_ID).size(20000).order(BucketOrder.count(false)).subAggregation(uniqueScientificNamesAgg);
+			}
 		} else if (filter.contains("nested")) {
 			String nestedFiled = filter.split("\\.")[1];
 			String nestedFilter = filter.replace("nested.", "");
@@ -1000,7 +1011,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		if (filter.equals(Constants.MVR_SCIENTIFIC_NAME) || filter.equals(Constants.AUTHOR_ID)
 				|| filter.equals(Constants.IDENTIFIER_ID) || filter.equals(Constants.GROUP_BY_DAY)
 				|| filter.equals(Constants.GROUP_BY_OBSERVED) || filter.equals(Constants.GROUP_BY_TRAITS)
-				|| filter.equals(Constants.GROUP_BY_TAXON)) {
+				|| filter.equals(Constants.GROUP_BY_TAXON) || filter.split("\\|")[0].equals("uploaders")) {
 			groupMonth = new LinkedHashMap<Object, Long>();
 		} else {
 			groupMonth = new HashMap<Object, Long>();
@@ -1070,7 +1081,21 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 					groupMonth.put(n.getKeyAsString() + '|' + entry.getKey(), (long) 0);
 				}
 			}
-		} else {
+		} else if (filter.split("\\|")[0].equals("uploaders")) {
+			Terms frommonth = response.getAggregations().get(Constants.AUTHOR_ID);
+
+			for (Terms.Bucket entry : frommonth.getBuckets()) {
+				Aggregation aggregation = entry.getAggregations().get("unique_scientific_names_count");
+				    //
+				groupMonth.put(entry.getKey()+"|observation", entry.getDocCount());
+				if (aggregation instanceof Cardinality) {
+				    Cardinality uniqueScientificNamesCount = (Cardinality) aggregation;
+				    long uniqueCount = uniqueScientificNamesCount.getValue();
+				    groupMonth.put(entry.getKey()+"|species", uniqueCount);
+				}
+			}
+		}
+		else {
 			Terms frommonth = response.getAggregations().get(filter);
 
 			for (Terms.Bucket entry : frommonth.getBuckets()) {
