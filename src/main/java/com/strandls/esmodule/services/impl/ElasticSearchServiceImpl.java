@@ -80,6 +80,8 @@ import org.elasticsearch.search.aggregations.metrics.Max;
 import org.elasticsearch.search.aggregations.metrics.MaxAggregationBuilder;
 import org.elasticsearch.search.aggregations.metrics.Min;
 import org.elasticsearch.search.aggregations.metrics.MinAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.ScriptedMetric;
+import org.elasticsearch.search.aggregations.metrics.ScriptedMetricAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.BucketScriptPipelineAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.BucketSortPipelineAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.ParsedSimpleValue;
@@ -674,13 +676,34 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		} else if (filter.equals(Constants.AUTHOR_ID) || filter.equals(Constants.IDENTIFIER_ID)) {
 			aggregation = AggregationBuilders.terms(filter).field(filter).size(20000).order(BucketOrder.count(false));
 		} else if (filter.split("\\|")[0].equals("uploaders")) {
-			CardinalityAggregationBuilder uniqueScientificNamesAgg = AggregationBuilders
-				    .cardinality("unique_scientific_names_count")
-				    .field("max_voted_reco.scientific_name.keyword");
+			ScriptedMetricAggregationBuilder exactCountAgg = AggregationBuilders.scriptedMetric("exact_count")
+			        .initScript(new Script("state.unique = new HashSet()"))
+			        .mapScript(new Script("if (doc['max_voted_reco.scientific_name.keyword'].size() > 0) {state.unique.add(doc['max_voted_reco.scientific_name.keyword'].value)}"))
+			        .combineScript(new Script("return state.unique.size()"))
+			        .reduceScript(new Script("long total = 0;for (int i = 0; i < states.length; i++) {total += states[i]}return total;"));
 			if (filter.split("\\|")[1].equals("species")) {
-				aggregation = AggregationBuilders.terms(Constants.AUTHOR_ID).field(Constants.AUTHOR_ID).size(20000).order(BucketOrder.aggregation("unique_scientific_names_count", false)).subAggregation(uniqueScientificNamesAgg);
+				CardinalityAggregationBuilder cardinalityForSorting = AggregationBuilders
+			            .cardinality("species_cardinality")
+			            .field("max_voted_reco.scientific_name.keyword")
+			            .precisionThreshold(40000);
+				aggregation = AggregationBuilders.terms(Constants.AUTHOR_ID).field(Constants.AUTHOR_ID).size(20000).order(BucketOrder.aggregation("species_cardinality", false)).subAggregation(cardinalityForSorting).subAggregation(exactCountAgg);
 			} else {
-				aggregation = AggregationBuilders.terms(Constants.AUTHOR_ID).field(Constants.AUTHOR_ID).size(20000).order(BucketOrder.count(false)).subAggregation(uniqueScientificNamesAgg);
+				aggregation = AggregationBuilders.terms(Constants.AUTHOR_ID).field(Constants.AUTHOR_ID).size(20000).order(BucketOrder.count(false)).subAggregation(exactCountAgg);
+			}
+		} else if (filter.split("\\|")[0].equals("identifiers")) {
+			ScriptedMetricAggregationBuilder exactCountAgg = AggregationBuilders.scriptedMetric("exact_count")
+			        .initScript(new Script("state.unique = new HashSet()"))
+			        .mapScript(new Script("if (doc['max_voted_reco.scientific_name.keyword'].size() > 0) {state.unique.add(doc['max_voted_reco.scientific_name.keyword'].value)}"))
+			        .combineScript(new Script("return state.unique.size()"))
+			        .reduceScript(new Script("long total = 0;for (int i = 0; i < states.length; i++) {total += states[i]}return total;"));
+			if (filter.split("\\|")[1].equals("species")) {
+				CardinalityAggregationBuilder cardinalityForSorting = AggregationBuilders
+			            .cardinality("species_cardinality")
+			            .field("max_voted_reco.scientific_name.keyword")
+			            .precisionThreshold(40000);
+				aggregation = AggregationBuilders.terms(Constants.IDENTIFIER_ID).field(Constants.IDENTIFIER_ID).size(20000).order(BucketOrder.aggregation("species_cardinality", false)).subAggregation(cardinalityForSorting).subAggregation(exactCountAgg);
+			} else {
+				aggregation = AggregationBuilders.terms(Constants.IDENTIFIER_ID).field(Constants.IDENTIFIER_ID).size(20000).order(BucketOrder.count(false)).subAggregation(exactCountAgg);
 			}
 		} else if (filter.contains("nested")) {
 			String nestedFiled = filter.split("\\.")[1];
@@ -1011,7 +1034,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		if (filter.equals(Constants.MVR_SCIENTIFIC_NAME) || filter.equals(Constants.AUTHOR_ID)
 				|| filter.equals(Constants.IDENTIFIER_ID) || filter.equals(Constants.GROUP_BY_DAY)
 				|| filter.equals(Constants.GROUP_BY_OBSERVED) || filter.equals(Constants.GROUP_BY_TRAITS)
-				|| filter.equals(Constants.GROUP_BY_TAXON) || filter.split("\\|")[0].equals("uploaders")) {
+				|| filter.equals(Constants.GROUP_BY_TAXON) || filter.split("\\|")[0].equals("uploaders") || filter.split("\\|")[0].equals("identifiers")) {
 			groupMonth = new LinkedHashMap<Object, Long>();
 		} else {
 			groupMonth = new HashMap<Object, Long>();
@@ -1083,15 +1106,36 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			}
 		} else if (filter.split("\\|")[0].equals("uploaders")) {
 			Terms frommonth = response.getAggregations().get(Constants.AUTHOR_ID);
-
 			for (Terms.Bucket entry : frommonth.getBuckets()) {
-				Aggregation aggregation = entry.getAggregations().get("unique_scientific_names_count");
+				Aggregation aggregation = entry.getAggregations().get("exact_count");
 				    //
 				groupMonth.put(entry.getKey()+"|observation", entry.getDocCount());
-				if (aggregation instanceof Cardinality) {
-				    Cardinality uniqueScientificNamesCount = (Cardinality) aggregation;
-				    long uniqueCount = uniqueScientificNamesCount.getValue();
-				    groupMonth.put(entry.getKey()+"|species", uniqueCount);
+				if (aggregation instanceof ScriptedMetric) {
+				    ScriptedMetric exactCountAgg = (ScriptedMetric) aggregation;
+				    Object result = exactCountAgg.aggregation();
+				    
+				    long uniqueCount = 0;
+				    if (result instanceof Number) {
+				        uniqueCount = ((Number) result).longValue();
+				    }
+				    groupMonth.put(entry.getKey() + "|species", uniqueCount);
+				}
+			}
+		}  else if (filter.split("\\|")[0].equals("identifiers")) {
+			Terms frommonth = response.getAggregations().get(Constants.IDENTIFIER_ID);
+			for (Terms.Bucket entry : frommonth.getBuckets()) {
+				Aggregation aggregation = entry.getAggregations().get("exact_count");
+				    //
+				groupMonth.put(entry.getKey()+"|observation", entry.getDocCount());
+				if (aggregation instanceof ScriptedMetric) {
+				    ScriptedMetric exactCountAgg = (ScriptedMetric) aggregation;
+				    Object result = exactCountAgg.aggregation();
+				    
+				    long uniqueCount = 0;
+				    if (result instanceof Number) {
+				        uniqueCount = ((Number) result).longValue();
+				    }
+				    groupMonth.put(entry.getKey() + "|species", uniqueCount);
 				}
 			}
 		}
