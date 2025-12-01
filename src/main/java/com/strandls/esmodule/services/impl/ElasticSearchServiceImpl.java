@@ -298,9 +298,13 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		try {
 			jsons = mapper.readValue(jsonArray, JsonNode[].class);
 		} catch (JsonParseException e) {
-			responses.add(new MapQueryResponse(MapQueryStatus.JSON_EXCEPTION, "Json Parsing Exception"));
+			String detailedError = "Json Parsing Exception: " + e.getMessage();
+			logger.error("JSON Parsing Exception during bulk upload parsing:", e);
+			responses.add(new MapQueryResponse(MapQueryStatus.JSON_EXCEPTION, detailedError));
 		} catch (JsonMappingException e) {
-			responses.add(new MapQueryResponse(MapQueryStatus.JSON_EXCEPTION, "Json Mapping Exception"));
+			String detailedError = "Json Mapping Exception: " + e.getMessage();
+			logger.error("JSON Mapping Exception during bulk upload parsing:", e);
+			responses.add(new MapQueryResponse(MapQueryStatus.JSON_EXCEPTION, detailedError));
 		}
 
 		if (jsons != null && !jsons[0].has("id")) {
