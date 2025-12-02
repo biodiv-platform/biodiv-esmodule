@@ -203,7 +203,7 @@ public class ESController {
 
 	@POST
 	@Path(ApiConstants.BULK_UPLOAD + "/{index}/{type}")
-	@Consumes(MediaType.TEXT_PLAIN)
+	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Bulk Upload Create Document", description = "Returns Success Failure")
 	@ApiResponses({

@@ -294,6 +294,11 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	private JsonNode[] parseJson(String jsonArray, List<MapQueryResponse> responses) throws IOException {
 		ObjectMapper mapper = new ObjectMapper();
 
+		logger.info("DEBUG parseJson: About to parse JSON, input type: {}",
+			jsonArray != null ? jsonArray.getClass().getName() : "null");
+		logger.info("DEBUG parseJson: Input starts with: {}",
+			jsonArray != null && jsonArray.length() > 100 ? jsonArray.substring(0, 100) : jsonArray);
+
 		JsonNode[] jsons = null;
 		try {
 			jsons = mapper.readValue(jsonArray, JsonNode[].class);
@@ -327,6 +332,13 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String indexParam = index.replaceAll("[\n\r\t]", "_");
 		String typeParam = type.replaceAll("[\n\r\t]", "_");
 		logger.info("Trying to bulk upload index: {}, type: {}", indexParam, typeParam);
+
+		// DEBUG: Log what we're receiving
+		logger.info("DEBUG: jsonArray parameter type: {}", jsonArray != null ? jsonArray.getClass().getName() : "null");
+		logger.info("DEBUG: jsonArray parameter value (first 500 chars): {}",
+			jsonArray != null && jsonArray.length() > 500 ? jsonArray.substring(0, 500) : jsonArray);
+		logger.info("DEBUG: jsonArray starts with '[': {}", jsonArray != null && jsonArray.startsWith("["));
+		logger.info("DEBUG: jsonArray length: {}", jsonArray != null ? jsonArray.length() : 0);
 
 		JsonNode[] jsons = parseJson(jsonArray, responses);
 		if (!responses.isEmpty()) {
