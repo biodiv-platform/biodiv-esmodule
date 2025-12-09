@@ -210,8 +210,11 @@ public class ESController {
 			@ApiResponse(responseCode = "200", description = "Success", content = @Content(array = @ArraySchema(schema = @Schema(implementation = MapQueryResponse.class)))),
 			@ApiResponse(responseCode = "500", description = "ERROR") })
 	public List<MapQueryResponse> bulkUpload(@PathParam("index") String index, @PathParam("type") String type,
-			@Parameter(name = "jsonArray") String jsonArray) {
+			@Parameter(name = "documents") List<Map<String, Object>> documents) {
 		try {
+			// Convert List<Map> to JSON string for the service layer
+			ObjectMapper mapper = new ObjectMapper();
+			String jsonArray = mapper.writeValueAsString(documents);
 			return elasticSearchService.bulkUpload(index, type, jsonArray);
 		} catch (IOException e) {
 			throw new WebApplicationException(
