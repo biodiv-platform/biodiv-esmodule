@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
@@ -54,8 +55,8 @@ public class UtilityMethods {
 		if (index.equalsIgnoreCase("etd")) {
 			return ExtendedTaxonDefinition.class;
 		}
-		return null;
-	}
+		return Map.class;
+	}	
 
 	public final List<ExtendedTaxonDefinition> rankDocument(List<ExtendedTaxonDefinition> records, String field,
 			String fieldText) {
