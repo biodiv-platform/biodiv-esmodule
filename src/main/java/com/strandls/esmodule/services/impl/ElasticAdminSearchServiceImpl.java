@@ -8,7 +8,6 @@ import org.apache.http.util.EntityUtils;
 import org.elasticsearch.client.Request;
 import org.elasticsearch.client.Response;
 import org.elasticsearch.client.RestClient;
-import org.elasticsearch.common.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,9 +21,9 @@ import jakarta.inject.Inject;
 
 /**
  * Implementation of {@link ElasticAdminSearchService}
+ * Compatible with Elasticsearch 9.x using low-level REST client
  *
  * @author mukund
- *
  */
 public class ElasticAdminSearchServiceImpl implements ElasticAdminSearchService {
 
@@ -37,20 +36,13 @@ public class ElasticAdminSearchServiceImpl implements ElasticAdminSearchService 
 		this.client = client.getLowLevelClient();
 	}
 
-	/*
-	 * (non-Javadoc)
-	 *
-	 * @see
-	 * com.strandls.naksha.es.services.api.ElasticAdminSearchService#postMapping(
-	 * java.lang.String, java.lang.String, java.lang.String)
-	 */
 	@Override
 	public MapQueryResponse postMapping(String index, String mapping) throws IOException {
 		String indexParam = index.replaceAll("[\n\r\t]", "_");
 		logger.info("Trying to add mapping to index: {}", indexParam);
 
 		StringEntity entity = null;
-		if (!Strings.isNullOrEmpty(mapping)) {
+		if (mapping != null && !mapping.trim().isEmpty()) {
 			entity = new StringEntity(mapping, ContentType.APPLICATION_JSON);
 		}
 
@@ -64,13 +56,6 @@ public class ElasticAdminSearchServiceImpl implements ElasticAdminSearchService 
 		return new MapQueryResponse(MapQueryStatus.UNKNOWN, status);
 	}
 
-	/*
-	 * (non-Javadoc)
-	 *
-	 * @see
-	 * com.strandls.naksha.es.services.api.ElasticAdminSearchService#getMapping(java
-	 * .lang.String)
-	 */
 	@Override
 	public MapDocument getMapping(String index) throws IOException {
 		String indexParam = index.replaceAll("[\n\r\t]", "_");
@@ -85,13 +70,6 @@ public class ElasticAdminSearchServiceImpl implements ElasticAdminSearchService 
 		return new MapDocument(EntityUtils.toString(response.getEntity()));
 	}
 
-	/*
-	 * (non-Javadoc)
-	 *
-	 * @see
-	 * com.strandls.naksha.es.services.api.ElasticAdminSearchService#createIndex(
-	 * java.lang.String, java.lang.String)
-	 */
 	@Override
 	public MapQueryResponse createIndex(String index, String type) throws IOException {
 		String indexParam = index.replaceAll("[\n\r\t]", "_");
@@ -111,7 +89,7 @@ public class ElasticAdminSearchServiceImpl implements ElasticAdminSearchService 
 		logger.info("Trying to add mapping to index: {}", index);
 
 		StringEntity entity = null;
-		if (!Strings.isNullOrEmpty(mapping)) {
+		if (mapping != null && !mapping.trim().isEmpty()) {
 			entity = new StringEntity(mapping, ContentType.APPLICATION_JSON);
 		}
 		Request request = new Request("PUT", index + "/");
