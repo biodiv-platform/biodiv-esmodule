@@ -1,0 +1,56 @@
+package com.strandls.esmodule.services.impl;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.Result;
+import co.elastic.clients.elasticsearch._types.SortOrder;
+import co.elastic.clients.elasticsearch._types.aggregations.*;
+import co.elastic.clients.elasticsearch._types.query_dsl.*;
+import co.elastic.clients.elasticsearch.core.*;
+import co.elastic.clients.elasticsearch.core.bulk.*;
+import co.elastic.clients.elasticsearch.core.search.*;
+import co.elastic.clients.elasticsearch.indices.*;
+import co.elastic.clients.elasticsearch.indices.get_mapping.IndexMappingRecord;
+import co.elastic.clients.json.JsonData;
+
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.strandls.es.ElasticSearchClient;
+import com.strandls.esmodule.Constants;
+import com.strandls.esmodule.indexes.pojo.ExtendedTaxonDefinition;
+import com.strandls.esmodule.models.*;
+import com.strandls.esmodule.models.query.*;
+import com.strandls.esmodule.services.ElasticSearchService;
+
+import jakarta.inject.Inject;
+
+/**
+ * Implementation of {@link ElasticSearchService}
+ * Migrated to Elasticsearch 9.x Java API Client
+ */
+public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements ElasticSearchService {
+
+	@Inject
+	private ElasticSearchClient client;
+
+	@Inject
+	private ObjectMapper objectMapper;
+
+	private final Logger logger = LoggerFactory.getLogger(ElasticSearchServiceImpl.class);
+	private static final Integer TOTAL_USER_UPPER_BOUND = 20000;
+	private static final String USERGROUP = "userGroup";
+
+	List<String> months = Arrays.asList("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec");

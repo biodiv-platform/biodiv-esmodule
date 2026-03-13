@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.http.HttpHost;
-import org.elasticsearch.client.RestClient;
 import org.glassfish.jersey.servlet.ServletContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +39,7 @@ public class ESModuleServeletContextListener extends GuiceServletContextListener
 			protected void configureServlets() {
 
 				ElasticSearchClient esClient = new ElasticSearchClient(
-						RestClient.builder(HttpHost.create(ESmoduleConfig.getString("es.url"))));
+						HttpHost.create(ESmoduleConfig.getString("es.url")));
 				bind(ElasticSearchClient.class).toInstance(esClient);
 
 				ObjectMapper objectMapper = new ObjectMapper();

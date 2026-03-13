@@ -1,15 +1,16 @@
-# ElasticSearch 6.0.0
+# ElasticSearch 9.0
 
 Setting up initial observation index after starting elasticsearch instance
 
 Run below query in Kibana before reindexing
 
+**Note:** Type names have been removed in Elasticsearch 8+. The mapping structure has been updated accordingly.
+
 ```
 PUT observation
 {
   "mappings": {
-    "observation": {
-      "properties": {
+    "properties": {
         "acceptednameid": {
           "type": "long"
         },
@@ -869,7 +870,6 @@ PUT observation
           "type": "long"
         }
       }
-    }
   },
   "settings": {
     "index": {
