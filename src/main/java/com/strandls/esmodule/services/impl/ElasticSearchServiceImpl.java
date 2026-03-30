@@ -6,7 +6,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,84 +13,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import org.apache.lucene.search.join.ScoreMode;
-import org.elasticsearch.action.bulk.BulkItemResponse;
-import org.elasticsearch.action.bulk.BulkRequest;
-import org.elasticsearch.action.bulk.BulkResponse;
-import org.elasticsearch.action.delete.DeleteRequest;
-import org.elasticsearch.action.delete.DeleteResponse;
-import org.elasticsearch.action.get.GetRequest;
-import org.elasticsearch.action.get.GetResponse;
-import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.action.index.IndexResponse;
-import org.elasticsearch.action.search.SearchRequest;
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.action.support.IndicesOptions;
-import org.elasticsearch.action.support.replication.ReplicationResponse;
-import org.elasticsearch.action.support.replication.ReplicationResponse.ShardInfo;
-import org.elasticsearch.action.update.UpdateRequest;
-import org.elasticsearch.action.update.UpdateResponse;
-import org.elasticsearch.client.RequestOptions;
-import org.elasticsearch.client.indices.GetMappingsRequest;
-import org.elasticsearch.client.indices.GetMappingsResponse;
-import org.elasticsearch.cluster.metadata.MappingMetadata;
-import org.elasticsearch.common.Strings;
-import org.elasticsearch.common.geo.GeoDistance;
-import org.elasticsearch.common.unit.DistanceUnit;
-import org.elasticsearch.common.xcontent.ToXContent;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.query.BoolQueryBuilder;
-import org.elasticsearch.index.query.GeoValidationMethod;
-import org.elasticsearch.index.query.MatchPhraseQueryBuilder;
-import org.elasticsearch.index.query.Operator;
-import org.elasticsearch.index.query.QueryBuilder;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.index.query.RangeQueryBuilder;
-import org.elasticsearch.index.query.TermQueryBuilder;
-import org.elasticsearch.script.Script;
-import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.search.aggregations.Aggregation;
-import org.elasticsearch.search.aggregations.AggregationBuilder;
-import org.elasticsearch.search.aggregations.AggregationBuilders;
-import org.elasticsearch.search.aggregations.Aggregations;
-import org.elasticsearch.search.aggregations.BucketOrder;
-import org.elasticsearch.search.aggregations.PipelineAggregatorBuilders;
-import org.elasticsearch.search.aggregations.bucket.filter.Filter;
-import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGrid;
-import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGridAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.geogrid.ParsedGeoHashGrid;
-import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramInterval;
-import org.elasticsearch.search.aggregations.bucket.histogram.Histogram;
-import org.elasticsearch.search.aggregations.bucket.missing.Missing;
-import org.elasticsearch.search.aggregations.bucket.nested.Nested;
-import org.elasticsearch.search.aggregations.bucket.terms.Terms;
-import org.elasticsearch.search.aggregations.bucket.terms.Terms.Bucket;
-import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.Cardinality;
-import org.elasticsearch.search.aggregations.metrics.CardinalityAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.Max;
-import org.elasticsearch.search.aggregations.metrics.MaxAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.Min;
-import org.elasticsearch.search.aggregations.metrics.MinAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.ScriptedMetric;
-import org.elasticsearch.search.aggregations.metrics.ScriptedMetricAggregationBuilder;
-import org.elasticsearch.search.aggregations.pipeline.BucketScriptPipelineAggregationBuilder;
-import org.elasticsearch.search.aggregations.pipeline.BucketSortPipelineAggregationBuilder;
-import org.elasticsearch.search.aggregations.pipeline.ParsedSimpleValue;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
-import org.elasticsearch.search.sort.FieldSortBuilder;
-import org.elasticsearch.search.sort.GeoDistanceSortBuilder;
-import org.elasticsearch.search.sort.SortBuilders;
-import org.elasticsearch.search.sort.SortOrder;
-import org.elasticsearch.search.suggest.Suggest;
-import org.elasticsearch.search.suggest.Suggest.Suggestion;
-import org.elasticsearch.search.suggest.Suggest.Suggestion.Entry;
-import org.elasticsearch.search.suggest.Suggest.Suggestion.Entry.Option;
-import org.elasticsearch.search.suggest.SuggestBuilder;
-import org.elasticsearch.search.suggest.SuggestBuilders;
-import org.elasticsearch.search.suggest.completion.CompletionSuggestionBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -99,6 +20,20 @@ import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+// ES 9 Client and Core
+import co.elastic.clients.elasticsearch._types.*;
+import co.elastic.clients.elasticsearch._types.aggregations.*;
+import co.elastic.clients.elasticsearch._types.mapping.TypeMapping;
+import co.elastic.clients.elasticsearch._types.query_dsl.*;
+import co.elastic.clients.elasticsearch.core.*;
+import co.elastic.clients.elasticsearch.core.bulk.*;
+import co.elastic.clients.elasticsearch.core.search.*;
+import co.elastic.clients.elasticsearch.indices.*;
+import co.elastic.clients.elasticsearch.indices.get_mapping.IndexMappingRecord;
+import co.elastic.clients.json.JsonData;
+import co.elastic.clients.util.NamedValue;
+
 import com.strandls.es.ElasticSearchClient;
 import com.strandls.esmodule.Constants;
 import com.strandls.esmodule.indexes.pojo.ExtendedTaxonDefinition;
@@ -174,30 +109,17 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String documentIdParam = documentId.replaceAll("[\n\r\t]", "_");
 		logger.info("Trying to create index: {}, type: {} & id: {}", indexParam, typeParam, documentIdParam);
 
-		IndexRequest request = new IndexRequest(index);
-		request.id(documentId);
-		request.source(document, XContentType.JSON);
-		// IndexResponse indexResponse = client.index(request); DEPRECATED
-		IndexResponse indexResponse = client.index(request, RequestOptions.DEFAULT);
+		Map<String, Object> docMap = objectMapper.readValue(document, Map.class);
 
-		ReplicationResponse.ShardInfo shardInfo = indexResponse.getShardInfo();
+		co.elastic.clients.elasticsearch.core.IndexResponse response = client.getClient()
+				.index(i -> i.index(index).id(documentId).document(docMap));
 
-		StringBuilder failureReason = new StringBuilder();
-
-		if (shardInfo.getFailed() > 0) {
-
-			for (ReplicationResponse.ShardInfo.Failure failure : shardInfo.getFailures()) {
-				failureReason.append(failure.reason());
-				failureReason.append(";");
-			}
-		}
-
-		MapQueryStatus queryStatus = MapQueryStatus.valueOf(indexResponse.getResult().name());
+		MapQueryStatus queryStatus = MapQueryStatus.valueOf(response.result().name());
 
 		logger.info("Created index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
 				queryStatus);
 
-		return new MapQueryResponse(queryStatus, failureReason.toString());
+		return new MapQueryResponse(queryStatus, "");
 	}
 
 	/*
@@ -215,13 +137,16 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		logger.info("Trying to fetch index: {}, type: {} & id: {}", indexParam, typeParam, documentIdParam);
 
-		GetRequest request = new GetRequest(index, documentId);
-		GetResponse response = client.get(request, RequestOptions.DEFAULT);
+		GetResponse<Map> response = client.getClient().get(g -> g.index(index).id(documentId), Map.class);
 
 		logger.info("Fetched index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
-				response.isExists());
+				response.found());
 
-		return new MapDocument(response.getSourceAsString());
+		if (response.found() && response.source() != null) {
+			String jsonString = objectMapper.writeValueAsString(response.source());
+			return new MapDocument(jsonString);
+		}
+		return new MapDocument(null);
 	}
 
 	/*
@@ -239,25 +164,14 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String documentIdParam = documentId.replaceAll("[\n\r\t]", "_");
 		logger.info("Trying to update index: {}, type: {} & id: {}", indexParam, typeParam, documentIdParam);
 
-		UpdateRequest request = new UpdateRequest(index, documentId);
-		request.doc(document);
-		UpdateResponse updateResponse = client.update(request, RequestOptions.DEFAULT);
-		ShardInfo shardInfo = updateResponse.getShardInfo();
-
-		String failureReason = "";
-
-		if (shardInfo.getFailed() > 0) {
-			for (ReplicationResponse.ShardInfo.Failure failure : shardInfo.getFailures()) {
-				failureReason = failure.reason() + ";";
-			}
-		}
-
-		MapQueryStatus queryStatus = MapQueryStatus.valueOf(updateResponse.getResult().name());
+		co.elastic.clients.elasticsearch.core.UpdateResponse<Map> updateResponse = client.getClient()
+				.update(u -> u.index(index).id(documentId).doc(document), Map.class);
+		MapQueryStatus queryStatus = MapQueryStatus.valueOf(updateResponse.result().name());
 
 		logger.info("Updated index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
 				queryStatus);
 
-		return new MapQueryResponse(queryStatus, failureReason);
+		return new MapQueryResponse(queryStatus, "");
 	}
 
 	/*
@@ -275,34 +189,22 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		logger.info("Trying to delete index: {}, type: {} & id: {}", indexParam, typeParam, documentIdParam);
 
-		DeleteRequest request = new DeleteRequest(index, documentId);
-		DeleteResponse deleteResponse = client.delete(request, RequestOptions.DEFAULT);
-		ReplicationResponse.ShardInfo shardInfo = deleteResponse.getShardInfo();
-
-		String failureReason = "";
-
-		if (shardInfo.getFailed() > 0) {
-
-			for (ReplicationResponse.ShardInfo.Failure failure : shardInfo.getFailures()) {
-				failureReason = failure.reason() + ";";
-			}
-		}
-
-		MapQueryStatus queryStatus = MapQueryStatus.valueOf(deleteResponse.getResult().name());
+		DeleteResponse deleteResponse = client.getClient().delete(d -> d.index(index).id(documentId));
+		MapQueryStatus queryStatus = MapQueryStatus.valueOf(deleteResponse.result().name());
 
 		logger.info("Deleted index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
 				queryStatus);
 
-		return new MapQueryResponse(queryStatus, failureReason);
+		return new MapQueryResponse(queryStatus, "");
 	}
 
 	private JsonNode[] parseJson(String jsonArray, List<MapQueryResponse> responses) throws IOException {
 		ObjectMapper mapper = new ObjectMapper();
 
 		logger.info("DEBUG parseJson: About to parse JSON, input type: {}",
-			jsonArray != null ? jsonArray.getClass().getName() : "null");
+				jsonArray != null ? jsonArray.getClass().getName() : "null");
 		logger.info("DEBUG parseJson: Input starts with: {}",
-			jsonArray != null && jsonArray.length() > 100 ? jsonArray.substring(0, 100) : jsonArray);
+				jsonArray != null && jsonArray.length() > 100 ? jsonArray.substring(0, 100) : jsonArray);
 
 		JsonNode[] jsons = null;
 		try {
@@ -341,7 +243,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		// DEBUG: Log what we're receiving
 		logger.info("DEBUG: jsonArray parameter type: {}", jsonArray != null ? jsonArray.getClass().getName() : "null");
 		logger.info("DEBUG: jsonArray parameter value (first 500 chars): {}",
-			jsonArray != null && jsonArray.length() > 500 ? jsonArray.substring(0, 500) : jsonArray);
+				jsonArray != null && jsonArray.length() > 500 ? jsonArray.substring(0, 500) : jsonArray);
 		logger.info("DEBUG: jsonArray starts with '[': {}", jsonArray != null && jsonArray.startsWith("["));
 		logger.info("DEBUG: jsonArray length: {}", jsonArray != null ? jsonArray.length() : 0);
 
@@ -352,42 +254,32 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			return responses;
 		}
 
-		BulkRequest request = new BulkRequest();
+		List<BulkOperation> operations = new ArrayList<>();
 
 		for (JsonNode json : jsons) {
-			IndexRequest ir = new IndexRequest(index);
-			ir.id(json.get("id").asText());
-			ir.source(json.toString(), XContentType.JSON);
-			request.add(ir);
+			Map<String, Object> docMap = objectMapper.convertValue(json, Map.class);
+			String id = json.get("id").asText();
 
+			operations
+					.add(BulkOperation.of(b -> b.index(idx -> idx.index(index).id(id).document(JsonData.of(docMap)))));
 		}
 
-		BulkResponse bulkResponse = client.bulk(request, RequestOptions.DEFAULT);
-		for (BulkItemResponse bulkItemResponse : bulkResponse) {
+		BulkResponse bulkResponse = client.getClient().bulk(br -> br.index(index).operations(operations));
+
+		for (BulkResponseItem item : bulkResponse.items()) {
 
 			StringBuilder failureReason = new StringBuilder();
 			MapQueryStatus queryStatus;
 
-			if (bulkItemResponse.isFailed()) {
-				failureReason.append(bulkItemResponse.getFailureMessage());
+			if (item.error() != null) {
+				failureReason.append(item.error().reason());
 				queryStatus = MapQueryStatus.ERROR;
 			} else {
-				IndexResponse indexResponse = bulkItemResponse.getResponse();
-				ReplicationResponse.ShardInfo shardInfo = indexResponse.getShardInfo();
-
-				if (shardInfo.getFailed() > 0) {
-
-					for (ReplicationResponse.ShardInfo.Failure failure : shardInfo.getFailures()) {
-						failureReason.append(failure.reason());
-						failureReason.append(";");
-					}
-				}
-
-				queryStatus = MapQueryStatus.valueOf(indexResponse.getResult().name());
+				queryStatus = MapQueryStatus.valueOf(item.result());
 			}
 
 			logger.info(" For index: {}, type: {}, bulk upload id: {}, the status is {}", indexParam, typeParam,
-					bulkItemResponse.getId(), queryStatus);
+					item.id(), queryStatus);
 
 			responses.add(new MapQueryResponse(queryStatus, failureReason.toString()));
 		}
@@ -402,40 +294,31 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String typeParam = type.replaceAll("[\n\r\t]", "_");
 		logger.info("Trying to bulk update index: {}, type: {}", indexParam, typeParam);
 
-		BulkRequest request = new BulkRequest();
+		List<BulkOperation> operations = new ArrayList<>();
 
-		for (Map<String, Object> doc : updateDocs)
-			request.add(new UpdateRequest(index, doc.get("id").toString()).doc(doc));
+		for (Map<String, Object> doc : updateDocs) {
+			String id = doc.get("id").toString();
+			operations.add(BulkOperation.of(b -> b.update(u -> u.index(index).id(id).action(a -> a.doc(doc)))));
+		}
 
-		BulkResponse bulkResponse = client.bulk(request, RequestOptions.DEFAULT);
+		BulkResponse bulkResponse = client.getClient().bulk(br -> br.index(index).operations(operations));
 
 		List<MapQueryResponse> responses = new ArrayList<>();
 
-		for (BulkItemResponse bulkItemResponse : bulkResponse) {
+		for (BulkResponseItem item : bulkResponse.items()) {
 
 			StringBuilder failureReason = new StringBuilder();
 			MapQueryStatus queryStatus;
 
-			if (bulkItemResponse.isFailed()) {
-				failureReason.append(bulkItemResponse.getFailureMessage());
+			if (item.error() != null) {
+				failureReason.append(item.error().reason());
 				queryStatus = MapQueryStatus.ERROR;
 			} else {
-				UpdateResponse updateResponse = bulkItemResponse.getResponse();
-				ReplicationResponse.ShardInfo shardInfo = updateResponse.getShardInfo();
-
-				if (shardInfo.getFailed() > 0) {
-
-					for (ReplicationResponse.ShardInfo.Failure failure : shardInfo.getFailures()) {
-						failureReason.append(failure.reason());
-						failureReason.append(";");
-					}
-				}
-
-				queryStatus = MapQueryStatus.valueOf(updateResponse.getResult().name());
+				queryStatus = MapQueryStatus.valueOf(item.result());
 			}
 
 			logger.info(" For index: {}, type: {}, bulk update id: {}, the status is {}", indexParam, typeParam,
-					bulkItemResponse.getId(), queryStatus);
+					item.id(), queryStatus);
 
 			responses.add(new MapQueryResponse(queryStatus, failureReason.toString()));
 		}
@@ -444,60 +327,75 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	}
 
-	private MapResponse querySearch(String index, QueryBuilder query, MapSearchParams searchParams,
-			String geoAggregationField, Integer geoAggegationPrecision) throws IOException {
+	private MapResponse querySearch(String index, Query query, MapSearchParams searchParams, String geoAggregationField,
+			Integer geoAggegationPrecision) throws IOException {
 
-		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-		if (query != null)
-			sourceBuilder.query(query);
-		if (searchParams.getFrom() != null)
-			sourceBuilder.from(searchParams.getFrom());
-		if (searchParams.getLimit() != null)
-			sourceBuilder.size(searchParams.getLimit());
+		Integer from = searchParams.getFrom() != null ? searchParams.getFrom() : 0;
+		Integer size = searchParams.getLimit() != null ? searchParams.getLimit() : 10;
+
+		SearchResponse<Map> searchResponse;
 
 		if (searchParams.getSortOn() != null) {
 			SortOrder sortOrder = searchParams.getSortType() != null && MapSortType.ASC == searchParams.getSortType()
-					? SortOrder.ASC
-					: SortOrder.DESC;
-			sourceBuilder.sort(searchParams.getSortOn(), sortOrder);
+					? SortOrder.Asc
+					: SortOrder.Desc;
+
+			if (geoAggregationField != null) {
+				Integer precision = geoAggegationPrecision != null ? geoAggegationPrecision : 1;
+				// Convert Integer precision to GeoHashPrecision
+				GeoHashPrecision geoHashPrecision = GeoHashPrecision.of(g -> g.geohashLength(precision));
+
+				searchResponse = client.getClient().search(s -> s.index(index)
+						.query(query != null ? query : Query.of(q -> q.matchAll(m -> m))).from(from).size(size)
+						.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(sortOrder)))
+						.aggregations("geohash",
+								a -> a.geohashGrid(g -> g.field(geoAggregationField).precision(geoHashPrecision)))
+						.trackTotalHits(t -> t.enabled(true)), Map.class);
+			} else {
+				searchResponse = client.getClient()
+						.search(s -> s.index(index).query(query != null ? query : Query.of(q -> q.matchAll(m -> m)))
+								.from(from).size(size)
+								.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(sortOrder)))
+								.trackTotalHits(t -> t.enabled(true)), Map.class);
+			}
+		} else {
+			if (geoAggregationField != null) {
+				Integer precision = geoAggegationPrecision != null ? geoAggegationPrecision : 1;
+				// Convert Integer precision to GeoHashPrecision
+				GeoHashPrecision geoHashPrecision = GeoHashPrecision.of(g -> g.geohashLength(precision));
+
+				searchResponse = client.getClient().search(s -> s.index(index)
+						.query(query != null ? query : Query.of(q -> q.matchAll(m -> m))).from(from).size(size)
+						.aggregations("geohash",
+								a -> a.geohashGrid(g -> g.field(geoAggregationField).precision(geoHashPrecision)))
+						.trackTotalHits(t -> t.enabled(true)), Map.class);
+			} else {
+				searchResponse = client.getClient()
+						.search(s -> s.index(index).query(query != null ? query : Query.of(q -> q.matchAll(m -> m)))
+								.from(from).size(size).trackTotalHits(t -> t.enabled(true)), Map.class);
+			}
 		}
-
-		if (geoAggregationField != null) {
-			geoAggegationPrecision = geoAggegationPrecision != null ? geoAggegationPrecision : 1;
-			sourceBuilder.aggregation(getGeoGridAggregationBuilder(geoAggregationField, geoAggegationPrecision));
-		}
-
-		sourceBuilder.trackTotalHits(true);
-		SearchRequest searchRequest = new SearchRequest(index);
-		searchRequest.source(sourceBuilder);
-
-		SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
 
 		List<MapDocument> result = new ArrayList<>();
 
-		long totalHits = searchResponse.getHits().getTotalHits().value;
+		long totalHits = searchResponse.hits().total().value();
 
-		for (SearchHit hit : searchResponse.getHits().getHits())
-			result.add(new MapDocument(hit.getSourceAsString()));
+		for (Hit<Map> hit : searchResponse.hits().hits()) {
+			String jsonString = objectMapper.writeValueAsString(hit.source());
+			result.add(new MapDocument(jsonString));
+		}
 
 		logger.info("Search completed with total hits: {}", totalHits);
 
 		String aggregationString = null;
-		if (geoAggregationField != null) {
-			Aggregation aggregation = searchResponse.getAggregations().asList().get(0);
-			XContentBuilder builder = XContentFactory.jsonBuilder();
-			builder.startObject();
-			aggregation.toXContent(builder, ToXContent.EMPTY_PARAMS);
-			builder.endObject();
-			String result2 = Strings.toString(builder);
-			aggregationString = result2;
-			// aggregationString = XContentHelper.convertToJson(builder, reformatJson)
-			logger.info("Aggregation search: {} completed", aggregation.getName());
-
+		if (geoAggregationField != null && searchResponse.aggregations() != null) {
+			Aggregate agg = searchResponse.aggregations().get("geohash");
+			if (agg != null) {
+				aggregationString = objectMapper.writeValueAsString(agg.geohashGrid());
+			}
 		}
 
 		return new MapResponse(result, totalHits, aggregationString);
-
 	}
 
 	/*
@@ -519,11 +417,12 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		logger.info("Term search for index: {}, type: {}, key: {}, value: {}", indexParam, typeParam, keyParam,
 				valueParam);
-		QueryBuilder query;
-		if (value != null)
-			query = QueryBuilders.termQuery(key, value);
-		else
-			query = QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(key));
+		Query query;
+		if (value != null) {
+			query = TermQuery.of(t -> t.field(key).value(FieldValue.of(value)))._toQuery();
+		} else {
+			query = BoolQuery.of(b -> b.mustNot(ExistsQuery.of(e -> e.field(key))._toQuery()))._toQuery();
+		}
 
 		return querySearch(index, query, searchParams, geoAggregationField, geoAggegationPrecision);
 
@@ -544,13 +443,19 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String indexParam = index.replaceAll("[\n\r\t]", "_");
 		String typeParam = type.replaceAll("[\n\r\t]", "_");
 		logger.info("Bool search for index: {}, type: {}", indexParam, typeParam);
-		BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+		List<Query> mustQueries = new ArrayList<>();
 		for (MapBoolQuery query : queries) {
-			if (query.getValues() != null)
-				boolQuery.must(QueryBuilders.termsQuery(query.getKey(), query.getValues()));
-			else
-				boolQuery.mustNot(QueryBuilders.existsQuery(query.getKey()));
+			if (query.getValues() != null) {
+				List<FieldValue> values = query.getValues().stream().map(v -> FieldValue.of(v.toString()))
+						.collect(Collectors.toList());
+				mustQueries.add(TermsQuery.of(t -> t.field(query.getKey()).terms(tf -> tf.value(values)))._toQuery());
+			} else {
+				mustQueries.add(BoolQuery.of(b -> b.mustNot(ExistsQuery.of(e -> e.field(query.getKey()))._toQuery()))
+						._toQuery());
+			}
 		}
+
+		Query boolQuery = BoolQuery.of(b -> b.must(mustQueries))._toQuery();
 
 		return querySearch(index, boolQuery, searchParams, geoAggregationField, geoAggegationPrecision);
 	}
@@ -567,13 +472,56 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	@Override
 	public MapResponse rangeSearch(String index, String type, List<MapRangeQuery> queries, MapSearchParams searchParams,
 			String geoAggregationField, Integer geoAggegationPrecision) throws IOException {
+
 		String indexParam = index.replaceAll("[\n\r\t]", "_");
 		String typeParam = type.replaceAll("[\n\r\t]", "_");
+
 		logger.info("Range search for index: {}, type: {}", indexParam, typeParam);
-		BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+
+		List<Query> mustQueries = new ArrayList<>();
+
 		for (MapRangeQuery query : queries) {
-			boolQuery.must(QueryBuilders.rangeQuery(query.getKey()).from(query.getStart()).to(query.getEnd()));
+
+			String field = query.getKey();
+			Object start = query.getStart();
+			Object end = query.getEnd();
+
+			mustQueries.add(RangeQuery.of(r -> {
+
+				// 🔹 NUMBER RANGE
+				if ((start instanceof Number) || (end instanceof Number)) {
+					return r.number(n -> {
+						n.field(field);
+
+						if (start != null) {
+							n.gte(((Number) start).doubleValue());
+						}
+						if (end != null) {
+							n.lte(((Number) end).doubleValue());
+						}
+
+						return n;
+					});
+				}
+
+				// 🔹 DATE / STRING RANGE (fallback like old ES)
+				return r.date(d -> {
+					d.field(field);
+
+					if (start != null) {
+						d.gte(start.toString());
+					}
+					if (end != null) {
+						d.lte(end.toString());
+					}
+
+					return d;
+				});
+
+			})._toQuery());
 		}
+
+		Query boolQuery = BoolQuery.of(b -> b.must(mustQueries))._toQuery();
 
 		return querySearch(index, boolQuery, searchParams, geoAggregationField, geoAggegationPrecision);
 	}
@@ -581,206 +529,34 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	@Override
 	public Map<String, List<DayAggregation>> aggregationByDay(String index, String user) throws IOException {
 
-		BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
-		TermQueryBuilder authorFilter = QueryBuilders.termQuery("author_id", user);
-		boolQuery.filter(authorFilter);
-		AggregationBuilder aggregation = null;
-		aggregation = AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("created_on")
-				.calendarInterval(DateHistogramInterval.days(1)).format("yyyy-MM-dd");
-		if (aggregation == null)
-			return null;
+		Query authorQuery = TermQuery.of(t -> t.field("author_id").value(FieldValue.of(user)))._toQuery();
 
-		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-		if (boolQuery != null)
-			sourceBuilder.query(boolQuery);
-		sourceBuilder.aggregation(aggregation);
-
-		SearchRequest request = new SearchRequest(index);
-		request.source(sourceBuilder);
-		SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+		SearchResponse<Void> response = client
+				.getClient().search(
+						s -> s.index(index).query(authorQuery).size(0)
+								.aggregations(Constants.TEMPORAL_AGG,
+										a -> a.dateHistogram(d -> d.field("created_on")
+												.calendarInterval(CalendarInterval.Day).format("yyyy-MM-dd"))),
+						Void.class);
 		Map<String, List<DayAggregation>> groupbyday = new LinkedHashMap<>();
-		Histogram dateHistogram = response.getAggregations().get(Constants.TEMPORAL_AGG);
 
-		for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
-			String year = entry.getKeyAsString().substring(0, 4); // Extract the year
-			List<DayAggregation> yeardata;
-			if (groupbyday.containsKey(year)) {
-				yeardata = groupbyday.get(year);
-			} else {
-				yeardata = new ArrayList<>();
+		if (response.aggregations() != null) {
+			Aggregate agg = response.aggregations().get(Constants.TEMPORAL_AGG);
+			if (agg != null && agg.isDateHistogram()) {
+				DateHistogramAggregate dateHistogram = agg.dateHistogram();
+
+				for (DateHistogramBucket entry : dateHistogram.buckets().array()) {
+					String dateStr = entry.keyAsString();
+					String year = dateStr.substring(0, 4);
+					List<DayAggregation> yeardata = groupbyday.computeIfAbsent(year, k -> new ArrayList<>());
+
+					DayAggregation data = new DayAggregation(dateStr, entry.docCount());
+					yeardata.add(data);
+				}
 			}
-
-			DayAggregation data = new DayAggregation(entry.getKeyAsString(), entry.getDocCount());
-			yeardata.add(data);
-			groupbyday.put(year, yeardata);
 		}
 
 		return groupbyday;
-	}
-
-	@Override
-	public Map<String, List<MonthAggregation>> aggregationByMonth(String index, String user) throws IOException {
-
-		BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
-		TermQueryBuilder authorFilter = QueryBuilders.termQuery("author_id", user);
-		boolQuery.filter(authorFilter);
-		AggregationBuilder aggregation = null;
-		aggregation = AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("from_date")
-				.calendarInterval(DateHistogramInterval.MONTH).format("yyyy-MMM");
-		if (aggregation == null)
-			return null;
-
-		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-		if (boolQuery != null)
-			sourceBuilder.query(boolQuery);
-		sourceBuilder.aggregation(aggregation);
-
-		SearchRequest request = new SearchRequest(index);
-		request.source(sourceBuilder);
-		SearchResponse response = client.search(request, RequestOptions.DEFAULT);
-		Histogram dateHistogram = response.getAggregations().get(Constants.TEMPORAL_AGG);
-		Histogram.Bucket lastBucket = dateHistogram.getBuckets().get(dateHistogram.getBuckets().size() - 1);
-		Map<String, List<MonthAggregation>> groupByMonth = new LinkedHashMap<>();
-		Integer yearInterval = 50;
-		String currentYear = lastBucket.getKeyAsString().substring(0, 4);
-
-		for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
-			String year = entry.getKeyAsString().substring(0, 4); // Extract the year
-			Integer intervaldiff = Integer.parseInt(currentYear) - Integer.parseInt(year);
-			Integer intervalId = intervaldiff / yearInterval;
-			String intervalKey = String.format("%04d", // %04d formats the number as a 4-digit year (e.g., 0050)
-					Math.max(Integer.parseInt(currentYear) - ((intervalId + 1) * yearInterval), 0)) + "-"
-					+ String.format("%04d", Integer.parseInt(currentYear) - (intervalId * yearInterval));
-			List<MonthAggregation> intervaldata;
-			if (groupByMonth.containsKey(intervalKey)) {
-				intervaldata = groupByMonth.get(intervalKey);
-			} else {
-				intervaldata = new ArrayList<>();
-			}
-			String month = entry.getKeyAsString().substring(5, 8); // Extract the month
-			MonthAggregation data = new MonthAggregation(month, year, entry.getDocCount());
-			intervaldata.add(data);
-			groupByMonth.put(intervalKey, intervaldata);
-		}
-
-		return groupByMonth;
-	}
-
-	@Override
-	public AggregationResponse aggregation(String index, String type, MapSearchQuery searchQuery,
-			String geoAggregationField, String filter, String geoShapeFilterField) throws IOException {
-		String indexParam = index.replaceAll("[\n\r\t]", "_");
-		String typeParam = type.replaceAll("[\n\r\t]", "_");
-		logger.info("SEARCH for index: {}, type: {}", indexParam, typeParam);
-
-		MapSearchParams searchParams = searchQuery.getSearchParams();
-		BoolQueryBuilder masterBoolQuery = getBoolQueryBuilder(searchQuery);
-
-		applyMapBounds(searchParams, masterBoolQuery, geoAggregationField);
-
-		if (geoShapeFilterField != null) {
-			applyShapeFilter(searchParams, masterBoolQuery, geoShapeFilterField);
-		}
-
-		AggregationBuilder aggregation = null;
-
-		if (filter.equals(Constants.MVR_SCIENTIFIC_NAME)) {
-			aggregation = AggregationBuilders.terms(filter).field(filter).size(50000);
-		} else if (filter.equals(Constants.AUTHOR_ID) || filter.equals(Constants.IDENTIFIER_ID)) {
-			aggregation = AggregationBuilders.terms(filter).field(filter).size(20000).order(BucketOrder.count(false));
-		} else if (filter.split("\\|")[0].equals("uploaders")) {
-			ScriptedMetricAggregationBuilder exactCountAgg = AggregationBuilders.scriptedMetric("exact_count")
-			        .initScript(new Script("state.unique = new HashSet()"))
-			        .mapScript(new Script("if (doc['max_voted_reco.scientific_name.keyword'].size() > 0) {state.unique.add(doc['max_voted_reco.scientific_name.keyword'].value)}"))
-			        .combineScript(new Script("return state.unique.size()"))
-			        .reduceScript(new Script("long total = 0;for (int i = 0; i < states.length; i++) {total += states[i]}return total;"));
-			if (filter.split("\\|")[1].equals("species")) {
-				CardinalityAggregationBuilder cardinalityForSorting = AggregationBuilders
-			            .cardinality("species_cardinality")
-			            .field("max_voted_reco.scientific_name.keyword")
-			            .precisionThreshold(40000);
-				aggregation = AggregationBuilders.terms(Constants.AUTHOR_ID).field(Constants.AUTHOR_ID).size(20000).order(BucketOrder.aggregation("species_cardinality", false)).subAggregation(cardinalityForSorting).subAggregation(exactCountAgg);
-			} else {
-				aggregation = AggregationBuilders.terms(Constants.AUTHOR_ID).field(Constants.AUTHOR_ID).size(20000).order(BucketOrder.count(false)).subAggregation(exactCountAgg);
-			}
-		} else if (filter.split("\\|")[0].equals("identifiers")) {
-			ScriptedMetricAggregationBuilder exactCountAgg = AggregationBuilders.scriptedMetric("exact_count")
-			        .initScript(new Script("state.unique = new HashSet()"))
-			        .mapScript(new Script("if (doc['max_voted_reco.scientific_name.keyword'].size() > 0) {state.unique.add(doc['max_voted_reco.scientific_name.keyword'].value)}"))
-			        .combineScript(new Script("return state.unique.size()"))
-			        .reduceScript(new Script("long total = 0;for (int i = 0; i < states.length; i++) {total += states[i]}return total;"));
-			if (filter.split("\\|")[1].equals("species")) {
-				CardinalityAggregationBuilder cardinalityForSorting = AggregationBuilders
-			            .cardinality("species_cardinality")
-			            .field("max_voted_reco.scientific_name.keyword")
-			            .precisionThreshold(40000);
-				aggregation = AggregationBuilders.terms(Constants.IDENTIFIER_ID).field(Constants.IDENTIFIER_ID).size(20000).order(BucketOrder.aggregation("species_cardinality", false)).subAggregation(cardinalityForSorting).subAggregation(exactCountAgg);
-			} else {
-				aggregation = AggregationBuilders.terms(Constants.IDENTIFIER_ID).field(Constants.IDENTIFIER_ID).size(20000).order(BucketOrder.count(false)).subAggregation(exactCountAgg);
-			}
-		} else if (filter.contains("nested")) {
-			String nestedFiled = filter.split("\\.")[1];
-			String nestedFilter = filter.replace("nested.", "");
-			aggregation = AggregationBuilders.nested(nestedFiled, nestedFiled)
-					.subAggregation(AggregationBuilders.terms(nestedFilter).field(nestedFilter).size(1000));
-		} else if (filter.equals(Constants.GROUP_BY_DAY)) {
-			aggregation = AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("created_on")
-					.calendarInterval(DateHistogramInterval.days(1)).format("yyyy-MM-dd");
-		} else if (filter.split("\\|")[0].equals("min")) {
-			aggregation = AggregationBuilders.min("min_date").field(filter.split("\\|")[1]).format("YYYY");
-
-		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
-			aggregation = AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("from_date")
-					.calendarInterval(DateHistogramInterval.MONTH).format("yyyy-MMM");
-		} else if (filter.equals(Constants.GROUP_BY_TRAITS)) {
-			TermsAggregationBuilder termsAgg = AggregationBuilders.terms("traits_agg")
-					.field("facts.trait_value.trait_aggregation.raw").size(1000);
-			aggregation = termsAgg
-					.subAggregation(AggregationBuilders.dateHistogram(Constants.TEMPORAL_AGG).field("from_date")
-							.calendarInterval(DateHistogramInterval.MONTH).format("yyyy-MMM").minDocCount(1));
-		} else if (filter.equals(Constants.GROUP_BY_TAXON)) {
-			aggregation = AggregationBuilders.terms("taxon_agg").field("max_voted_reco.hierarchy.taxon_id")
-					.size(500000);
-		} else if (filter.split("\\|")[0].equals("taxon_path")) {
-			TermsAggregationBuilder taxonAggregation = AggregationBuilders.terms("NAME") // same name as before
-					.field("path.keyword").size(200); // same size
-
-			TermsAggregationBuilder subAggregation = AggregationBuilders.terms("raw_name")
-					.field("italicised_form.keyword").size(10);
-			aggregation = taxonAggregation.subAggregation(subAggregation);
-		} else {
-			aggregation = AggregationBuilders.terms(filter).field(filter).size(1000);
-		}
-
-		AggregationResponse aggregationResponse = new AggregationResponse();
-
-		if (filter.equals(Constants.MAX_VOTED_RECO) || filter.equals(Constants.MVR_TAXON_STATUS)) {
-			AggregationResponse temp = null;
-			aggregation = AggregationBuilders.filter(Constants.AVAILABLE, QueryBuilders.existsQuery(filter));
-			temp = groupAggregation(index, aggregation, masterBoolQuery, filter);
-			HashMap<Object, Long> t = new HashMap<>();
-			if (temp != null) {
-				for (Map.Entry<Object, Long> entry : temp.getGroupAggregation().entrySet()) {
-					t.put(entry.getKey(), entry.getValue());
-				}
-			}
-			if (filter.equals(Constants.MAX_VOTED_RECO))
-				aggregation = AggregationBuilders.missing("miss").field(filter.concat(".id"));
-			if (filter.equals(Constants.MVR_TAXON_STATUS))
-				aggregation = AggregationBuilders.missing("miss").field(filter.concat(".keyword"));
-			temp = groupAggregation(index, aggregation, masterBoolQuery, filter);
-			if (temp != null) {
-				for (Map.Entry<Object, Long> entry : temp.getGroupAggregation().entrySet()) {
-					t.put(entry.getKey(), entry.getValue());
-				}
-			}
-			aggregationResponse.setGroupAggregation(t);
-
-		} else {
-			aggregationResponse = groupAggregation(index, aggregation, masterBoolQuery, filter);
-
-		}
-		return aggregationResponse;
 	}
 
 	public List<IdentifiersInfo> identifierInfo(String index, String userIds) {
@@ -789,20 +565,14 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		for (int i = 0; i < l.size(); i++) {
 			String id = l.get(i);
-			BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery()
-					.must(QueryBuilders.termQuery("all_reco_vote.authors_voted.id", id));
+			Query query = TermQuery.of(t -> t.field("all_reco_vote.authors_voted.id").value(FieldValue.of(id)))
+					._toQuery();
 
-			SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-			sourceBuilder.query(boolQueryBuilder);
-			sourceBuilder.size(1);
-
-			SearchRequest request = new SearchRequest(index);
-			request.source(sourceBuilder);
-			SearchResponse response;
 			try {
-				response = client.search(request, RequestOptions.DEFAULT);
-				for (SearchHit hit : response.getHits().getHits()) {
-					Map<String, Object> sourceMap = hit.getSourceAsMap();
+				SearchResponse<Map> response = client.getClient().search(s -> s.index(index).query(query).size(1),
+						Map.class);
+				for (Hit<Map> hit : response.hits().hits()) {
+					Map<String, Object> sourceMap = hit.source();
 					List<Object> allRecoVote = new ArrayList<>((List<Object>) sourceMap.get("all_reco_vote"));
 
 					for (int n = 0; n < allRecoVote.size(); n++) {
@@ -838,19 +608,13 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String authorIdConstant = "author_id";
 		for (int i = 0; i < l.size(); i++) {
 			String id = l.get(i);
-			BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery()
-					.must(QueryBuilders.termQuery(authorIdConstant, id));
-			SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+			Query query = TermQuery.of(t -> t.field(authorIdConstant).value(FieldValue.of(id)))._toQuery();
 
-			sourceBuilder.query(boolQueryBuilder);
-			sourceBuilder.size(1);
-			SearchRequest request = new SearchRequest(index);
-			request.source(sourceBuilder);
-			SearchResponse response;
 			try {
-				response = client.search(request, RequestOptions.DEFAULT);
-				for (SearchHit hit : response.getHits().getHits()) {
-					Map<String, Object> sourceMap = hit.getSourceAsMap();
+				SearchResponse<Map> response = client.getClient().search(s -> s.index(index).query(query).size(1),
+						Map.class);
+				for (Hit<Map> hit : response.hits().hits()) {
+					Map<String, Object> sourceMap = hit.source();
 					String name = String.valueOf(sourceMap.get("created_by"));
 					String pic = String.valueOf(sourceMap.get("profile_pic"));
 					Long authorId = Long.parseLong(String.valueOf(sourceMap.get(authorIdConstant)));
@@ -864,56 +628,30 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		return (result);
 	}
 
-	/*
-	 * (non-Javadoc)
-	 *
-	 * @see
-	 * com.strandls.naksha.es.services.api.ElasticSearchService#search(java.lang.
-	 * String, java.lang.String, com.strandls.naksha.es.models.query.MapSearchQuery,
-	 * java.lang.String, java.lang.Integer, java.lang.Boolean, java.lang.String)
-	 */
-	@Override
-	public MapResponse search(String index, String type, MapSearchQuery searchQuery, String geoAggregationField,
-			Integer geoAggegationPrecision, Boolean onlyFilteredAggregation, String termsAggregationField,
-			String geoShapeFilterField) throws IOException {
-		String indexParam = index.replaceAll("[\n\r\t]", "_");
-		String typeParam = type.replaceAll("[\n\r\t]", "_");
-		logger.info("SEARCH for index: {}, type: {}", indexParam, typeParam);
+	private MapDocument aggregateSearchGeo(String index, String field, Integer precision, Query query)
+			throws IOException {
 
-		MapSearchParams searchParams = searchQuery.getSearchParams();
-		BoolQueryBuilder masterBoolQuery = getBoolQueryBuilder(searchQuery);
+		if (field == null)
+			return null;
 
-		GeoGridAggregationBuilder geoGridAggregationBuilder = getGeoGridAggregationBuilder(geoAggregationField,
-				geoAggegationPrecision);
-		MapDocument aggregateSearch = aggregateSearch(index, geoGridAggregationBuilder, masterBoolQuery);
-		String geohashAggregation = null;
-		if (aggregateSearch != null)
-			geohashAggregation = aggregateSearch.getDocument().toString();
+		// Convert Integer precision to GeoHashPrecision using the builder pattern
+		GeoHashPrecision prec = precision != null ? GeoHashPrecision.of(g -> g.geohashLength(precision))
+				: GeoHashPrecision.of(g -> g.geohashLength(1));
 
-		String termsAggregation = null;
-		if (termsAggregationField != null) {
-			termsAggregation = termsAggregation(index, type, termsAggregationField, null, null, geoAggregationField,
-					searchQuery).getDocument().toString();
+		SearchResponse<Void> searchResponse = client.getClient().search(s -> s.index(index).size(0).query(query)
+				.aggregations("geohash", a -> a.geohashGrid(g -> g.field(field).precision(prec))), Void.class);
+
+		if (searchResponse.aggregations() != null) {
+			Aggregate agg = searchResponse.aggregations().get("geohash");
+			// Fix: Use isGeohashGrid() directly without _get()
+			if (agg != null && agg.isGeohashGrid()) {
+				String result = objectMapper.writeValueAsString(agg.geohashGrid());
+				logger.info("Aggregation search: geohash completed");
+				return new MapDocument(result);
+			}
 		}
 
-		if (onlyFilteredAggregation != null && onlyFilteredAggregation) {
-			applyMapBounds(searchParams, masterBoolQuery, geoAggregationField);
-			aggregateSearch = aggregateSearch(index, geoGridAggregationBuilder, masterBoolQuery);
-			if (aggregateSearch != null)
-				geohashAggregation = aggregateSearch.getDocument().toString();
-			return new MapResponse(new ArrayList<>(), 0, geohashAggregation, geohashAggregation, termsAggregation);
-		}
-
-		if (geoShapeFilterField != null) {
-			applyShapeFilter(searchParams, masterBoolQuery, geoShapeFilterField);
-		}
-		MapResponse mapResponse = querySearch(index, masterBoolQuery, searchParams, geoAggregationField,
-				geoAggegationPrecision);
-		mapResponse.setViewFilteredGeohashAggregation(mapResponse.getGeohashAggregation());
-		mapResponse.setGeohashAggregation(geohashAggregation);
-		mapResponse.setTermsAggregation(termsAggregation);
-
-		return mapResponse;
+		return null;
 	}
 
 	/*
@@ -932,7 +670,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		logger.info("GeoHash aggregation for index: {}, type: {} on field: {} with precision: {}", indexParam,
 				typeParam, fieldParam, precision);
 
-		return aggregateSearch(index, getGeoGridAggregationBuilder(field, precision), null);
+		return aggregateSearchGeo(index, field, precision, null);
 	}
 
 	/*
@@ -950,327 +688,34 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		if (size == null)
 			size = 500;
-		String indexParam = index.replaceAll("[\n\r\t]", "_");
-		String typeParam = type.replaceAll("[\n\r\t]", "_");
-		String fieldParam = field.replaceAll("[\n\r\t]", "_");
-		String subfieldParam = subField.replaceAll("[\n\r\t]", "_");
-		String sizeParam = size.toString().replaceAll("[\n\r\t]", "_");
+
+		// Log parameters (sanitized)
 		logger.info("Terms aggregation for index: {}, type: {} on field: {} and sub field: {} with size: {}",
-				indexParam, typeParam, fieldParam, subfieldParam, sizeParam);
+				index.replaceAll("[\n\r\t]", "_"), type.replaceAll("[\n\r\t]", "_"), field.replaceAll("[\n\r\t]", "_"),
+				subField.replaceAll("[\n\r\t]", "_"), size.toString().replaceAll("[\n\r\t]", "_"));
 
-		BoolQueryBuilder boolQuery = getBoolQueryBuilder(query);
+		// Build the query using builders
+		BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder();
+
+		// Add search conditions from MapSearchQuery
+		addSearchConditions(boolQueryBuilder, query);
+
+		// Apply map bounds if present
 		if (query.getSearchParams() != null) {
-			applyMapBounds(query.getSearchParams(), boolQuery, locationField);
+			applyMapBounds(query.getSearchParams(), boolQueryBuilder, locationField);
 		}
 
-		return aggregateSearch(index, getTermsAggregationBuilder(field, subField, size), boolQuery);
+		// Build the final query
+		Query boolQuery = boolQueryBuilder.build()._toQuery();
+
+		return aggregateSearchTerms(index, field, subField, size, boolQuery);
 	}
 
-	private MapDocument aggregateSearch(String index, AggregationBuilder aggQuery, QueryBuilder query)
-			throws IOException {
-
-		if (aggQuery == null)
-			return null;
-
-		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-
-		if (query != null)
-			sourceBuilder.query(query);
-		sourceBuilder.aggregation(aggQuery);
-
-		SearchRequest searchRequest = new SearchRequest(index);
-		searchRequest.source(sourceBuilder);
-
-		SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-
-		Aggregation aggregation = searchResponse.getAggregations().asList().get(0);
-		XContentBuilder builder = XContentFactory.jsonBuilder();
-		builder.startObject();
-		aggregation.toXContent(builder, ToXContent.EMPTY_PARAMS);
-		builder.endObject();
-		String result2 = Strings.toString(builder);
-		logger.info("Aggregation search: {} completed", aggregation.getName());
-
-		return new MapDocument(result2);
-
-	}
-
-	private AggregationResponse groupAggregation(String index, AggregationBuilder aggQuery, QueryBuilder query,
-			String filter) {
-
-		if (aggQuery == null)
-			return null;
-
-		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-		if (query != null)
-			if (filter.split("\\|")[0].equals("taxon_path")) {
-				String[] parts = filter.split("\\|");
-				String taxonPathRegex;
-
-				if (parts.length > 1 && !parts[1].isEmpty()) {
-					// Match child nodes (e.g., "123.456.789")
-					taxonPathRegex = parts[1] + "\\.[0-9]+";
-				} else {
-					// Match full path (e.g., "123" or "123.456")
-					taxonPathRegex = "[0-9]+(\\.[0-9]+)?";
-				}
-
-				QueryBuilder taxonQuery = QueryBuilders.regexpQuery("path.keyword", taxonPathRegex);
-				sourceBuilder.query(taxonQuery);
-			} else {
-				sourceBuilder.query(query);
-				if (filter.split("\\|")[0].equals("min")) {
-					MaxAggregationBuilder maxAgg = AggregationBuilders.max("max_date").field(filter.split("\\|")[1])
-							.format("YYYY");
-					sourceBuilder.aggregation(maxAgg);
-				}
-			}
-		sourceBuilder.size(0);
-		sourceBuilder.aggregation(aggQuery);
-
-		SearchRequest request = new SearchRequest(index);
-		if (filter.split("\\|")[0].equals("taxon_path")) {
-			request = new SearchRequest("extended_taxon_definition");
+	private void addSearchConditions(BoolQuery.Builder builder, MapSearchQuery query) {
+		Query searchQuery = getBoolQuery(query);
+		if (searchQuery != null) {
+			builder.must(searchQuery);
 		}
-		request.source(sourceBuilder);
-		SearchResponse response = null;
-		try {
-			response = client.search(request, RequestOptions.DEFAULT);
-		} catch (Exception e) {
-			e.printStackTrace();
-			// TODO Auto-generated catch block
-			logger.error(e.getMessage());
-		}
-
-		Map<Object, Long> groupMonth;
-
-		if (filter.equals(Constants.MVR_SCIENTIFIC_NAME) || filter.equals(Constants.AUTHOR_ID)
-				|| filter.equals(Constants.IDENTIFIER_ID) || filter.equals(Constants.GROUP_BY_DAY)
-				|| filter.equals(Constants.GROUP_BY_OBSERVED) || filter.equals(Constants.GROUP_BY_TRAITS)
-				|| filter.equals(Constants.GROUP_BY_TAXON) || filter.split("\\|")[0].equals("uploaders") || filter.split("\\|")[0].equals("identifiers")) {
-			groupMonth = new LinkedHashMap<Object, Long>();
-		} else {
-			groupMonth = new HashMap<Object, Long>();
-		}
-
-		if (filter.equals(Constants.MVR_TAXON_STATUS) || filter.equals(Constants.MAX_VOTED_RECO)) {
-			Filter filterAgg = response.getAggregations().get(Constants.AVAILABLE);
-			if (filterAgg != null) {
-				groupMonth.put(Constants.AVAILABLE, filterAgg.getDocCount());
-			}
-			Missing missingAgg = response.getAggregations().get("miss");
-			if (missingAgg != null) {
-				groupMonth.put("missing", missingAgg.getDocCount());
-			}
-
-		} else if (filter.contains("nested")) {
-			String nestedFiled = filter.split("\\.")[1];
-			Nested nestedResponse = response.getAggregations().get(nestedFiled);
-			Terms termResp = nestedResponse.getAggregations().get(filter.replace("nested.", ""));
-			for (Terms.Bucket entry : termResp.getBuckets()) {
-				groupMonth.put(entry.getKey(), entry.getDocCount());
-			}
-		} else if (filter.equals(Constants.GROUP_BY_DAY)) {
-			Histogram dateHistogram = response.getAggregations().get(Constants.TEMPORAL_AGG);
-
-			for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
-				groupMonth.put(entry.getKeyAsString(), entry.getDocCount());
-			}
-
-		} else if (filter.split("\\|")[0].equals("min")) {
-			Aggregations aggregations = response.getAggregations();
-			Min minAgg = aggregations.get("min_date");
-			Max maxAgg = aggregations.get("max_date");
-			groupMonth.put(minAgg.getValueAsString(), (long) 0);
-			groupMonth.put(maxAgg.getValueAsString(), (long) 0);
-
-		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
-			Histogram dateHistogram = response.getAggregations().get(Constants.TEMPORAL_AGG);
-
-			for (Histogram.Bucket entry : dateHistogram.getBuckets()) {
-				groupMonth.put(entry.getKeyAsString(), entry.getDocCount());
-			}
-		} else if (filter.equals(Constants.GROUP_BY_TRAITS)) {
-			Terms termsHistogram = response.getAggregations().get("traits_agg");
-			for (Terms.Bucket entry : termsHistogram.getBuckets()) {
-				Histogram dateHistogram = entry.getAggregations().get(Constants.TEMPORAL_AGG);
-				Map<String, Long> monthSumDays = new LinkedHashMap<>();
-				for (Histogram.Bucket dateEntry : dateHistogram.getBuckets()) {
-					String monthName = dateEntry.getKeyAsString().substring(5, 8); // Extract the month
-					monthSumDays.put(monthName,
-							monthSumDays.getOrDefault(monthName, (long) 0) + dateEntry.getDocCount());
-				}
-				for (String month : months) {
-					groupMonth.put(entry.getKeyAsString() + "_" + month, monthSumDays.getOrDefault(month, (long) 0));
-				}
-			}
-		} else if (filter.equals(Constants.GROUP_BY_TAXON)) {
-			Terms termsHistogram = response.getAggregations().get("taxon_agg");
-			for (Terms.Bucket entry : termsHistogram.getBuckets()) {
-				groupMonth.put(entry.getKeyAsString(), entry.getDocCount());
-			}
-		} else if (filter.split("\\|")[0].equals("taxon_path")) {
-			Terms termsHistogram = response.getAggregations().get("NAME");
-			for (Terms.Bucket entry : termsHistogram.getBuckets()) {
-				Terms bucket_name = entry.getAggregations().get("raw_name");
-				for (Terms.Bucket n : bucket_name.getBuckets()) {
-					groupMonth.put(n.getKeyAsString() + '|' + entry.getKey(), (long) 0);
-				}
-			}
-		} else if (filter.split("\\|")[0].equals("uploaders")) {
-			Terms frommonth = response.getAggregations().get(Constants.AUTHOR_ID);
-			for (Terms.Bucket entry : frommonth.getBuckets()) {
-				Aggregation aggregation = entry.getAggregations().get("exact_count");
-				    //
-				groupMonth.put(entry.getKey()+"|observation", entry.getDocCount());
-				if (aggregation instanceof ScriptedMetric) {
-				    ScriptedMetric exactCountAgg = (ScriptedMetric) aggregation;
-				    Object result = exactCountAgg.aggregation();
-				    
-				    long uniqueCount = 0;
-				    if (result instanceof Number) {
-				        uniqueCount = ((Number) result).longValue();
-				    }
-				    groupMonth.put(entry.getKey() + "|species", uniqueCount);
-				}
-			}
-		}  else if (filter.split("\\|")[0].equals("identifiers")) {
-			Terms frommonth = response.getAggregations().get(Constants.IDENTIFIER_ID);
-			for (Terms.Bucket entry : frommonth.getBuckets()) {
-				Aggregation aggregation = entry.getAggregations().get("exact_count");
-				    //
-				groupMonth.put(entry.getKey()+"|observation", entry.getDocCount());
-				if (aggregation instanceof ScriptedMetric) {
-				    ScriptedMetric exactCountAgg = (ScriptedMetric) aggregation;
-				    Object result = exactCountAgg.aggregation();
-				    
-				    long uniqueCount = 0;
-				    if (result instanceof Number) {
-				        uniqueCount = ((Number) result).longValue();
-				    }
-				    groupMonth.put(entry.getKey() + "|species", uniqueCount);
-				}
-			}
-		}
-		else {
-			Terms frommonth = response.getAggregations().get(filter);
-
-			for (Terms.Bucket entry : frommonth.getBuckets()) {
-
-				groupMonth.put(entry.getKey(), entry.getDocCount());
-			}
-		}
-
-		return new AggregationResponse(groupMonth);
-	}
-
-	@Override
-	public ObservationInfo getObservationRightPan(String index, String type, String id, Boolean isMaxVotedRecoId)
-			throws IOException {
-
-		MatchPhraseQueryBuilder masterBoolQuery = getBoolQueryBuilderObservationPan(id, isMaxVotedRecoId);
-		AggregationBuilder aggregation = AggregationBuilders.terms("observed_in_month")
-				.field("observed_in_month.keyword").size(1000);
-
-		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-		sourceBuilder.query(masterBoolQuery);
-		sourceBuilder.aggregation(aggregation);
-		sourceBuilder.size(1000);
-		String[] includes = { Constants.OBSERVATION_ID, Constants.REPR_IMAGE_URL, Constants.MAX_VOTED_RECO,
-				Constants.LOCATION };
-		sourceBuilder.fetchSource(includes, null);
-		sourceBuilder.sort("created_on", SortOrder.DESC);
-
-		SearchRequest request = new SearchRequest(index);
-		request.source(sourceBuilder);
-
-		SearchResponse response = client.search(request, RequestOptions.DEFAULT);
-
-		List<SimilarObservation> similarObservation = new ArrayList<SimilarObservation>();
-		List<ObservationMapInfo> latlon = new ArrayList<ObservationMapInfo>();
-
-		HashMap<Object, Long> groupMonth = new HashMap<Object, Long>();
-		Terms frommonth = response.getAggregations().get("observed_in_month");
-		for (Terms.Bucket entry : frommonth.getBuckets()) {
-			groupMonth.put(entry.getKey(), entry.getDocCount());
-		}
-		for (SearchHit hit : response.getHits().getHits()) {
-
-			Location loc = objectMapper.readValue(
-					objectMapper.writeValueAsString(hit.getSourceAsMap().get(Constants.LOCATION)), Location.class);
-			MaxVotedReco maxVotedReco = objectMapper.readValue(
-					objectMapper.writeValueAsString(hit.getSourceAsMap().get(Constants.MAX_VOTED_RECO)),
-					MaxVotedReco.class);
-
-			if (maxVotedReco == null)
-				maxVotedReco = new MaxVotedReco();
-
-			latlon.add(new ObservationMapInfo(
-					Long.parseLong(hit.getSourceAsMap().get(Constants.OBSERVATION_ID).toString()),
-					maxVotedReco.getScientific_name(), loc.getLat(), loc.getLon()));
-
-			similarObservation.add(new SimilarObservation(
-					Long.parseLong(hit.getSourceAsMap().get(Constants.OBSERVATION_ID).toString()),
-					maxVotedReco.getScientific_name(),
-					String.valueOf(hit.getSourceAsMap().get(Constants.REPR_IMAGE_URL))));
-		}
-		return new ObservationInfo(groupMonth, similarObservation, latlon);
-	}
-
-	@Override
-	public List<ObservationNearBy> observationNearBy(String index, String type, Double lat, Double lon)
-			throws IOException {
-
-		GeoDistanceSortBuilder sortBuilder = SortBuilders.geoDistanceSort(Constants.LOCATION, lat, lon);
-		sortBuilder.order(SortOrder.ASC);
-		sortBuilder.unit(DistanceUnit.KILOMETERS);
-		sortBuilder.geoDistance(GeoDistance.PLANE);
-		sortBuilder.validation(GeoValidationMethod.STRICT);
-		sortBuilder.ignoreUnmapped(true);
-
-		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-		sourceBuilder.sort(sortBuilder);
-		sourceBuilder.size(15);
-		String[] includes = { Constants.OBSERVATION_ID, Constants.REPR_IMAGE_URL, Constants.MAX_VOTED_RECO,
-				Constants.LOCATION, "group_name" };
-		sourceBuilder.fetchSource(includes, null);
-
-		SearchRequest request = new SearchRequest(index);
-		request.source(sourceBuilder);
-
-		SearchResponse response = client.search(request, RequestOptions.DEFAULT);
-
-		List<ObservationNearBy> nearBy = new ArrayList<ObservationNearBy>();
-
-		Double distance;
-		Double lat2;
-		Double lon2;
-		for (SearchHit hit : response.getHits().getHits()) {
-
-			Location loc = objectMapper.readValue(
-					objectMapper.writeValueAsString(hit.getSourceAsMap().get(Constants.LOCATION)), Location.class);
-
-			MaxVotedReco maxVotedReco = objectMapper.readValue(
-					objectMapper.writeValueAsString(hit.getSourceAsMap().get(Constants.MAX_VOTED_RECO)),
-					MaxVotedReco.class);
-			if (maxVotedReco == null)
-				maxVotedReco = new MaxVotedReco();
-
-			lat2 = loc.getLat();
-			lon2 = loc.getLon();
-			distance = distanceCalculate(lat, lon, lat2, lon2);
-
-			nearBy.add(
-					new ObservationNearBy(Long.parseLong(hit.getSourceAsMap().get(Constants.OBSERVATION_ID).toString()),
-							maxVotedReco.getScientific_name(),
-							String.valueOf(hit.getSourceAsMap().get(Constants.REPR_IMAGE_URL)), distance,
-							hit.getSourceAsMap().get("group_name").toString()));
-
-		}
-
-		Collections.sort(nearBy, (obv1, obv2) -> obv1.getDistance().compareTo(obv2.getDistance()));
-
-		return nearBy;
 	}
 
 	public Double distanceCalculate(Double lat1, Double lon1, Double lat2, Double lon2) {
@@ -1289,74 +734,625 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		return (dist);
 	}
 
-	@Override
-	public <T> List<T> autoCompletion(String index, String type, String field, String text, Class<T> classMapped) {
-		// the completion method works for the mapping where edgeNGram is used
-		logger.info("inside auto completion method");
+	private MapDocument aggregateSearchTerms(String index, String field, String subField, Integer size, Query query)
+			throws IOException {
 
-		if (field.equals("common_name")) {
-			field = "common_names.name";
-		} else if (field.equals("scientific_name")) {
-			field = "name";
+		if (field == null)
+			return null;
+
+		SearchResponse<Void> searchResponse;
+
+		if (subField != null) {
+			searchResponse = client.getClient().search(s -> {
+				var builder = s.index(index).size(0);
+				if (query != null) {
+					builder = builder.query(query);
+				}
+				return builder.aggregations(field, a -> a.terms(t -> t.field(field).size(size)).aggregations(subField,
+						sa -> sa.terms(t -> t.field(subField).size(10))));
+			}, Void.class);
+		} else {
+			searchResponse = client.getClient().search(s -> {
+				var builder = s.index(index).size(0);
+				if (query != null) {
+					builder = builder.query(query);
+				}
+				return builder.aggregations(field, a -> a.terms(t -> t.field(field).size(size)));
+			}, Void.class);
 		}
 
-		List<T> matchedResults = new ArrayList<T>();
-		QueryBuilder query = QueryBuilders.matchPhraseQuery(field, text);
-		SearchRequest searchRequest = new SearchRequest(index);
-		SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-		searchSourceBuilder.size(100);
-		searchSourceBuilder.fetchSource(null, new String[] { Constants.TIMESTAMP, Constants.VERSION });
-		SearchResponse searchResponse = null;
-		try {
-			searchSourceBuilder.query(query);
-			searchRequest.source(searchSourceBuilder);
-			searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+		if (searchResponse.aggregations() != null) {
+			Aggregate agg = searchResponse.aggregations().get(field);
+			if (agg != null) {
+				String result = objectMapper.writeValueAsString(agg);
+				logger.info("Aggregation search: {} completed", field);
+				return new MapDocument(result);
+			}
+		}
 
-			for (SearchHit hit : searchResponse.getHits().getHits()) {
-				try {
-					matchedResults.add(objectMapper.readValue(hit.getSourceAsString(), classMapped));
-				} catch (Exception e) {
-					logger.error(e.getMessage());
+		return null;
+	}
+
+	@Override
+	public AggregationResponse aggregation(String index, String type, MapSearchQuery searchQuery,
+			String geoAggregationField, String filter, String geoShapeFilterField) throws IOException {
+
+		String indexParam = sanitize(index);
+		String typeParam = sanitize(type);
+		logger.info("SEARCH for index: {}, type: {}", indexParam, typeParam);
+
+		MapSearchParams searchParams = searchQuery.getSearchParams();
+
+		// Build bool query
+		BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder();
+		Query searchDsl = getBoolQuery(searchQuery);
+		if (searchDsl != null) {
+			boolQueryBuilder.must(searchDsl);
+		}
+
+		applyMapBounds(searchParams, boolQueryBuilder, geoAggregationField);
+
+		if (geoShapeFilterField != null) {
+			applyShapeFilter(searchParams, boolQueryBuilder, geoShapeFilterField);
+		}
+
+		Query finalQuery = boolQueryBuilder.build()._toQuery();
+
+		Aggregation aggregation = buildAggregation(filter);
+
+		AggregationResponse aggregationResponse = new AggregationResponse();
+
+		if (filter.equals(Constants.MAX_VOTED_RECO) || filter.equals(Constants.MVR_TAXON_STATUS)) {
+
+			AggregationResponse temp;
+			HashMap<Object, Long> merged = new HashMap<>();
+
+			// exists / available
+			Aggregation existsAgg = new Aggregation.Builder().filter(f -> f.exists(e -> e.field(filter))).build();
+
+			temp = groupAggregation(index, existsAgg, finalQuery, filter);
+			if (temp != null && temp.getGroupAggregation() != null) {
+				merged.putAll(temp.getGroupAggregation());
+			}
+
+			// missing
+			String missingField = filter.equals(Constants.MAX_VOTED_RECO) ? filter + ".id" : filter + ".keyword";
+
+			Aggregation missingAgg = new Aggregation.Builder().missing(m -> m.field(missingField)).build();
+
+			temp = groupAggregation(index, missingAgg, finalQuery, filter);
+			if (temp != null && temp.getGroupAggregation() != null) {
+				merged.putAll(temp.getGroupAggregation());
+			}
+
+			aggregationResponse.setGroupAggregation(merged);
+
+		} else {
+			aggregationResponse = groupAggregation(index, aggregation, finalQuery, filter);
+		}
+
+		return aggregationResponse;
+	}
+
+	private Aggregation buildAggregation(String filter) {
+
+		if (filter.equals(Constants.MVR_SCIENTIFIC_NAME)) {
+			return new Aggregation.Builder().terms(t -> t.field(filter).size(50000)).build();
+
+		} else if (filter.equals(Constants.AUTHOR_ID) || filter.equals(Constants.IDENTIFIER_ID)) {
+			return new Aggregation.Builder().terms(t -> t.field(filter).size(20000).order(getCountDescOrder())).build();
+
+		} else if (filter.split("\\|")[0].equals("uploaders")) {
+
+			String[] parts = filter.split("\\|");
+			boolean speciesSort = parts.length > 1 && "species".equals(parts[1]);
+
+			Map<String, Aggregation> subAggs = new HashMap<>();
+			subAggs.put("exact_count", buildExactCountAggregation());
+
+			if (speciesSort) {
+				subAggs.put("species_cardinality",
+						new Aggregation.Builder().cardinality(
+								c -> c.field("max_voted_reco.scientific_name.keyword").precisionThreshold(40000))
+								.build());
+
+				return new Aggregation.Builder().terms(
+						t -> t.field(Constants.AUTHOR_ID).size(20000).order(getAggDescOrder("species_cardinality")))
+						.aggregations(subAggs).build();
+			}
+
+			return new Aggregation.Builder()
+					.terms(t -> t.field(Constants.AUTHOR_ID).size(20000).order(getCountDescOrder()))
+					.aggregations(subAggs).build();
+
+		} else if (filter.split("\\|")[0].equals("identifiers")) {
+
+			String[] parts = filter.split("\\|");
+			boolean speciesSort = parts.length > 1 && "species".equals(parts[1]);
+
+			Map<String, Aggregation> subAggs = new HashMap<>();
+			subAggs.put("exact_count", buildExactCountAggregation());
+
+			if (speciesSort) {
+				subAggs.put("species_cardinality",
+						new Aggregation.Builder().cardinality(
+								c -> c.field("max_voted_reco.scientific_name.keyword").precisionThreshold(40000))
+								.build());
+
+				return new Aggregation.Builder().terms(
+						t -> t.field(Constants.IDENTIFIER_ID).size(20000).order(getAggDescOrder("species_cardinality")))
+						.aggregations(subAggs).build();
+			}
+
+			return new Aggregation.Builder()
+					.terms(t -> t.field(Constants.IDENTIFIER_ID).size(20000).order(getCountDescOrder()))
+					.aggregations(subAggs).build();
+
+		} else if (filter.contains("nested")) {
+
+			String nestedField = filter.split("\\.")[1];
+			String nestedFilter = filter.replace("nested.", "");
+
+			Map<String, Aggregation> subAggs = new HashMap<>();
+			subAggs.put(nestedFilter, new Aggregation.Builder().terms(t -> t.field(nestedFilter).size(1000)).build());
+
+			return new Aggregation.Builder().nested(n -> n.path(nestedField)).aggregations(subAggs).build();
+
+		} else if (filter.equals(Constants.GROUP_BY_DAY)) {
+
+			return new Aggregation.Builder()
+					.dateHistogram(
+							d -> d.field("created_on").calendarInterval(CalendarInterval.Day).format("yyyy-MM-dd"))
+					.build();
+
+		} else if (filter.split("\\|")[0].equals("min")) {
+
+			return new Aggregation.Builder().min(m -> m.field(filter.split("\\|")[1]).format("YYYY")).build();
+
+		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
+
+			return new Aggregation.Builder()
+					.dateHistogram(
+							d -> d.field("from_date").calendarInterval(CalendarInterval.Month).format("yyyy-MMM"))
+					.build();
+
+		} else if (filter.equals(Constants.GROUP_BY_TRAITS)) {
+
+			Map<String, Aggregation> subAggs = new HashMap<>();
+			subAggs.put(Constants.TEMPORAL_AGG, new Aggregation.Builder().dateHistogram(d -> d.field("from_date")
+					.calendarInterval(CalendarInterval.Month).format("yyyy-MMM").minDocCount(1)).build());
+
+			return new Aggregation.Builder().terms(t -> t.field("facts.trait_value.trait_aggregation.raw").size(1000))
+					.aggregations(subAggs).build();
+
+		} else if (filter.equals(Constants.GROUP_BY_TAXON)) {
+
+			return new Aggregation.Builder().terms(t -> t.field("max_voted_reco.hierarchy.taxon_id").size(500000))
+					.build();
+
+		} else if (filter.split("\\|")[0].equals("taxon_path")) {
+
+			Map<String, Aggregation> subAggs = new HashMap<>();
+			subAggs.put("raw_name",
+					new Aggregation.Builder().terms(t -> t.field("italicised_form.keyword").size(10)).build());
+
+			return new Aggregation.Builder().terms(t -> t.field("path.keyword").size(200)).aggregations(subAggs)
+					.build();
+
+		} else {
+
+			return new Aggregation.Builder().terms(t -> t.field(filter).size(1000)).build();
+		}
+	}
+
+	private Aggregation buildExactCountAggregation() {
+		return new Aggregation.Builder().scriptedMetric(sm -> sm
+				.initScript(buildInlineScript("state.unique = new HashSet()"))
+				.mapScript(buildInlineScript(
+						"if (doc['max_voted_reco.scientific_name.keyword'].size() > 0) {state.unique.add(doc['max_voted_reco.scientific_name.keyword'].value)}"))
+				.combineScript(buildInlineScript("return state.unique.size()"))
+				.reduceScript(buildInlineScript(
+						"long total = 0; for (int i = 0; i < states.length; i++) { total += states[i] } return total;")))
+				.build();
+	}
+
+	private Script buildInlineScript(String source) {
+		return new Script.Builder().lang(ScriptLanguage.Painless)
+				.source(new ScriptSource.Builder().scriptString(source).build()).build();
+	}
+
+	private List<NamedValue<SortOrder>> getCountDescOrder() {
+		return Collections.singletonList(new NamedValue<>("_count", SortOrder.Desc));
+	}
+
+	private List<NamedValue<SortOrder>> getAggDescOrder(String aggName) {
+		return Collections.singletonList(new NamedValue<>(aggName, SortOrder.Desc));
+	}
+
+	private AggregationResponse groupAggregation(String index, Aggregation aggregation, Query query, String filter)
+			throws IOException {
+
+		SearchResponse<Void> response = client.getClient().search(s -> {
+			var search = s.index(index).size(0);
+
+			if (query != null) {
+				search = search.query(query);
+			}
+
+			return search.aggregations("agg_result", aggregation);
+		}, Void.class);
+
+		AggregationResponse result = new AggregationResponse();
+		HashMap<Object, Long> groupAggregation = new HashMap<>();
+
+		Aggregate agg = response.aggregations().get("agg_result");
+		if (agg == null) {
+			result.setGroupAggregation(groupAggregation);
+			return result;
+		}
+
+		// String terms
+		if (agg.isSterms()) {
+			for (StringTermsBucket bucket : agg.sterms().buckets().array()) {
+				groupAggregation.put(bucket.key().toString(), bucket.docCount());
+			}
+		}
+		// Long terms
+		else if (agg.isLterms()) {
+			for (LongTermsBucket bucket : agg.lterms().buckets().array()) {
+				groupAggregation.put(bucket.key(), bucket.docCount());
+			}
+		}
+		// Double terms
+		else if (agg.isDterms()) {
+			for (DoubleTermsBucket bucket : agg.dterms().buckets().array()) {
+				groupAggregation.put(bucket.key(), bucket.docCount());
+			}
+		}
+		// Date histogram
+		else if (agg.isDateHistogram()) {
+			for (DateHistogramBucket bucket : agg.dateHistogram().buckets().array()) {
+				groupAggregation.put(bucket.keyAsString(), bucket.docCount());
+			}
+		}
+		// Missing
+		else if (agg.isMissing()) {
+			groupAggregation.put("missing", agg.missing().docCount());
+		}
+		// Filter
+		else if (agg.isFilter()) {
+			groupAggregation.put(Constants.AVAILABLE, agg.filter().docCount());
+		}
+		// Nested
+		else if (agg.isNested()) {
+			Map<String, Aggregate> nestedAggs = agg.nested().aggregations();
+			if (nestedAggs != null && !nestedAggs.isEmpty()) {
+				Aggregate nestedInner = nestedAggs.values().iterator().next();
+
+				if (nestedInner.isSterms()) {
+					for (StringTermsBucket bucket : nestedInner.sterms().buckets().array()) {
+						groupAggregation.put(bucket.key().toString(), bucket.docCount());
+					}
+				} else if (nestedInner.isLterms()) {
+					for (LongTermsBucket bucket : nestedInner.lterms().buckets().array()) {
+						groupAggregation.put(bucket.key(), bucket.docCount());
+					}
+				} else if (nestedInner.isDterms()) {
+					for (DoubleTermsBucket bucket : nestedInner.dterms().buckets().array()) {
+						groupAggregation.put(bucket.key(), bucket.docCount());
+					}
 				}
 			}
-		} catch (Exception e) {
-			logger.error(e.getMessage());
 		}
+
+		result.setGroupAggregation(groupAggregation);
+		return result;
+	}
+
+	@Override
+	public MapResponse autocompleteSpeciesContributors(String index, String type, String name) throws IOException {
+
+		SearchResponse<Object> searchResponse = client
+				.getClient().search(
+						s -> s.index(index).size(10)
+								.query(q -> q.bool(b -> b
+										.must(mustQueries -> mustQueries.nested(n -> n.path("taxonomy")
+												.query(nq -> nq.term(t -> t.field("taxonomy.role.keyword")
+														.value("SPECIES CONTRIBUTOR")))
+												.scoreMode(ChildScoreMode.None)))
+										.must(mustQueries -> mustQueries
+												.matchPhrasePrefix(mpp -> mpp.field("user.name").query(name))))),
+						Object.class);
+
+		List<MapDocument> result = new ArrayList<>();
+
+		for (Hit<Object> hit : searchResponse.hits().hits()) {
+			Object source = hit.source();
+			if (source != null) {
+				String sourceAsString = objectMapper.writeValueAsString(source);
+				result.add(new MapDocument(sourceAsString));
+			}
+		}
+
+		long totalHits = searchResponse.hits().total() != null ? searchResponse.hits().total().value() : 0;
+
+		return new MapResponse(result, totalHits, null);
+	}
+
+	@Override
+	public Map<String, List<MonthAggregation>> aggregationByMonth(String index, String user) throws IOException {
+
+		// Build term query for author_id
+		Query authorQuery = TermQuery.of(t -> t.field("author_id").value(user)) // FieldValue.of() is not needed in ES9,
+																				// just pass the value directly
+				._toQuery();
+
+		SearchResponse<Void> response = client
+				.getClient().search(
+						s -> s.index(index).query(authorQuery).size(0)
+								.aggregations(Constants.TEMPORAL_AGG,
+										a -> a.dateHistogram(d -> d.field("from_date")
+												.calendarInterval(CalendarInterval.Month).format("yyyy-MMM"))),
+						Void.class);
+
+		Map<String, List<MonthAggregation>> groupByMonth = new LinkedHashMap<>();
+
+		if (response.aggregations() != null) {
+			Aggregate agg = response.aggregations().get(Constants.TEMPORAL_AGG);
+			if (agg != null && agg.isDateHistogram()) {
+				DateHistogramAggregate dateHistogram = agg.dateHistogram();
+
+				// Safely get buckets - handle both array and keyed buckets
+				List<DateHistogramBucket> buckets;
+				if (dateHistogram.buckets().isArray()) {
+					buckets = dateHistogram.buckets().array();
+				} else {
+					buckets = new ArrayList<>(dateHistogram.buckets().keyed().values());
+				}
+
+				if (!buckets.isEmpty()) {
+					DateHistogramBucket lastBucket = buckets.get(buckets.size() - 1);
+					Integer yearInterval = 50;
+					String currentYear = lastBucket.keyAsString().substring(0, 4);
+
+					for (DateHistogramBucket entry : buckets) {
+						String year = entry.keyAsString().substring(0, 4);
+						Integer intervaldiff = Integer.parseInt(currentYear) - Integer.parseInt(year);
+						Integer intervalId = intervaldiff / yearInterval;
+						String intervalKey = String.format("%04d",
+								Math.max(Integer.parseInt(currentYear) - ((intervalId + 1) * yearInterval), 0)) + "-"
+								+ String.format("%04d", Integer.parseInt(currentYear) - (intervalId * yearInterval));
+
+						List<MonthAggregation> intervaldata = groupByMonth.computeIfAbsent(intervalKey,
+								k -> new ArrayList<>());
+
+						String month = entry.keyAsString().substring(5, 8);
+						MonthAggregation data = new MonthAggregation(month, year, entry.docCount());
+						intervaldata.add(data);
+					}
+				}
+			}
+		}
+
+		return groupByMonth;
+	}
+
+	@Override
+	public MapResponse search(String index, String type, MapSearchQuery query, String geoAggregationField,
+			Integer geoAggegationPrecision, Boolean onlyFilteredAggregation, String termsAggregationField,
+			String geoFilterField) throws IOException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public ObservationInfo getObservationRightPan(String index, String type, String id, Boolean isMaxVotedRecoId)
+			throws IOException {
+
+		Query finalQuery = getBoolQueryBuilderObservationPan(id, isMaxVotedRecoId);
+
+		SearchResponse<Map> response = client.getClient().search(
+				s -> s.index(index).size(1000)
+						.source(src -> src.filter(f -> f.includes(Constants.OBSERVATION_ID, Constants.REPR_IMAGE_URL,
+								Constants.MAX_VOTED_RECO, Constants.LOCATION)))
+						.query(finalQuery)
+						.sort(so -> so.field(f -> f.field("created_on")
+								.order(co.elastic.clients.elasticsearch._types.SortOrder.Desc)))
+						.aggregations("observed_in_month",
+								a -> a.terms(t -> t.field("observed_in_month.keyword").size(1000))),
+				Map.class);
+
+		List<SimilarObservation> similarObservation = new ArrayList<>();
+		List<ObservationMapInfo> latlon = new ArrayList<>();
+		HashMap<Object, Long> groupMonth = new HashMap<>();
+
+		Aggregate monthAgg = response.aggregations().get("observed_in_month");
+		if (monthAgg != null && monthAgg.sterms() != null) {
+			for (StringTermsBucket bucket : monthAgg.sterms().buckets().array()) {
+				groupMonth.put(bucket.key().stringValue(), bucket.docCount());
+			}
+		}
+
+		for (Hit<Map> hit : response.hits().hits()) {
+			if (hit.source() == null) {
+				continue;
+			}
+
+			Location loc = objectMapper.readValue(objectMapper.writeValueAsString(hit.source().get(Constants.LOCATION)),
+					Location.class);
+
+			MaxVotedReco maxVotedReco = objectMapper.readValue(
+					objectMapper.writeValueAsString(hit.source().get(Constants.MAX_VOTED_RECO)), MaxVotedReco.class);
+
+			if (maxVotedReco == null) {
+				maxVotedReco = new MaxVotedReco();
+			}
+
+			Long observationId = Long.parseLong(hit.source().get(Constants.OBSERVATION_ID).toString());
+
+			latlon.add(new ObservationMapInfo(observationId, maxVotedReco.getScientific_name(), loc.getLat(),
+					loc.getLon()));
+
+			similarObservation.add(new SimilarObservation(observationId, maxVotedReco.getScientific_name(),
+					String.valueOf(hit.source().get(Constants.REPR_IMAGE_URL))));
+		}
+
+		return new ObservationInfo(groupMonth, similarObservation, latlon);
+	}
+
+	@Override
+	public List<ObservationNearBy> observationNearBy(String index, String type, Double lat, Double lon)
+			throws IOException {
+
+		logger.info("Observation nearby search for index: {}, type: {}, lat: {}, lon: {}", sanitize(index),
+				sanitize(type), lat, lon);
+
+		String[] includes = { Constants.OBSERVATION_ID, Constants.REPR_IMAGE_URL, Constants.MAX_VOTED_RECO,
+				Constants.LOCATION, "group_name" };
+
+		SearchResponse<Map> response = client
+				.getClient().search(
+						s -> s.index(index).size(15)
+								.sort(so -> so.geoDistance(g -> g.field(Constants.LOCATION)
+										.location(l -> l.latlon(ll -> ll.lat(lat).lon(lon)))
+										.order(co.elastic.clients.elasticsearch._types.SortOrder.Asc)
+										.unit(co.elastic.clients.elasticsearch._types.DistanceUnit.Kilometers)
+										.distanceType(co.elastic.clients.elasticsearch._types.GeoDistanceType.Plane)
+										.ignoreUnmapped(true)))
+								.source(src -> src.filter(f -> f.includes(Arrays.asList(includes)))),
+						Map.class);
+
+		List<ObservationNearBy> nearBy = new ArrayList<>();
+
+		Double distance;
+		Double lat2;
+		Double lon2;
+
+		for (Hit<Map> hit : response.hits().hits()) {
+
+			if (hit.source() == null) {
+				continue;
+			}
+
+			Map sourceMap = hit.source();
+
+			Location loc = objectMapper.readValue(objectMapper.writeValueAsString(sourceMap.get(Constants.LOCATION)),
+					Location.class);
+
+			MaxVotedReco maxVotedReco = objectMapper.readValue(
+					objectMapper.writeValueAsString(sourceMap.get(Constants.MAX_VOTED_RECO)), MaxVotedReco.class);
+
+			if (maxVotedReco == null) {
+				maxVotedReco = new MaxVotedReco();
+			}
+
+			lat2 = loc.getLat();
+			lon2 = loc.getLon();
+			distance = distanceCalculate(lat, lon, lat2, lon2);
+
+			nearBy.add(new ObservationNearBy(Long.parseLong(sourceMap.get(Constants.OBSERVATION_ID).toString()),
+					maxVotedReco.getScientific_name(), String.valueOf(sourceMap.get(Constants.REPR_IMAGE_URL)),
+					distance, sourceMap.get("group_name").toString()));
+		}
+
+		Collections.sort(nearBy, (obv1, obv2) -> obv1.getDistance().compareTo(obv2.getDistance()));
+
+		logger.info("Observation nearby search completed. Total results: {}", nearBy.size());
+
+		return nearBy;
+	}
+
+	private String normalizeAutocompleteField(String field) {
+		if ("common_name".equals(field)) {
+			return "common_names.name";
+		} else if ("scientific_name".equals(field)) {
+			return "name";
+		}
+		return field;
+	}
+
+	private <T> List<T> mapSearchHits(SearchResponse<Map> searchResponse, Class<T> classMapped) {
+		List<T> matchedResults = new ArrayList<>();
+
+		for (Hit<Map> hit : searchResponse.hits().hits()) {
+			try {
+				if (hit.source() != null) {
+					matchedResults
+							.add(objectMapper.readValue(objectMapper.writeValueAsString(hit.source()), classMapped));
+				}
+			} catch (Exception e) {
+				logger.error("Error mapping search hit: {}", e.getMessage(), e);
+			}
+		}
+
 		return matchedResults;
+	}
+
+	@Override
+	public <T> List<T> autoCompletion(String index, String type, String field, String text, Class<T> classMapped) {
+		logger.info("inside auto completion method");
+
+		String normalizedField = normalizeAutocompleteField(field);
+
+		try {
+			SearchResponse<Map> searchResponse = client.getClient()
+					.search(s -> s.index(index).size(100).source(
+							src -> src.filter(f -> f.excludes(Arrays.asList(Constants.TIMESTAMP, Constants.VERSION))))
+							.query(q -> q.matchPhrase(m -> m.field(normalizedField).query(text))), Map.class);
+
+			return mapSearchHits(searchResponse, classMapped);
+
+		} catch (Exception e) {
+			logger.error("Error in autoCompletion: {}", e.getMessage(), e);
+		}
+
+		return new ArrayList<>();
 	}
 
 	@Override
 	public <T> List<T> autoCompletion(String index, String type, String field, String text, String filterField,
 			Integer filter, Class<T> classMapped) {
 
-		if (field.equals("common_name")) {
-			field = "common_names.name";
-		} else if (field.equals("scientific_name")) {
-			field = "name";
-		}
-		List<T> matchedResults = new ArrayList<T>();
-		QueryBuilder query = QueryBuilders.boolQuery().must(QueryBuilders.matchPhraseQuery(field, text))
-				.filter(QueryBuilders.termQuery(filterField, filter));
-		SearchRequest searchRequest = new SearchRequest(index);
-		SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-		searchSourceBuilder.size(10000);
-		searchSourceBuilder.fetchSource(null, new String[] { Constants.TIMESTAMP, Constants.VERSION });
-		SearchResponse searchResponse = null;
-		try {
-			searchSourceBuilder.query(query);
-			searchRequest.source(searchSourceBuilder);
-			searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+		String normalizedField = normalizeAutocompleteField(field);
 
-			for (SearchHit hit : searchResponse.getHits().getHits()) {
-				try {
-					matchedResults.add(objectMapper.readValue(hit.getSourceAsString(), classMapped));
-				} catch (Exception e) {
-					logger.error(e.getMessage());
-				}
-			}
+		try {
+			SearchResponse<Map> searchResponse = client
+					.getClient().search(
+							s -> s.index(index).size(10000)
+									.source(src -> src.filter(
+											f -> f.excludes(Arrays.asList(Constants.TIMESTAMP, Constants.VERSION))))
+									.query(q -> q.bool(
+											b -> b.must(m -> m.matchPhrase(mp -> mp.field(normalizedField).query(text)))
+													.filter(f -> f.term(t -> t.field(filterField).value(filter))))),
+							Map.class);
+
+			return mapSearchHits(searchResponse, classMapped);
+
 		} catch (Exception e) {
-			logger.error(e.getMessage());
+			logger.error("Error in filtered autoCompletion: {}", e.getMessage(), e);
 		}
+
+		return new ArrayList<>();
+	}
+
+	private List<ExtendedTaxonDefinition> processElasticResponse(SearchResponse<Map> searchResponse) {
+		List<ExtendedTaxonDefinition> matchedResults = new ArrayList<>();
+
+		if (searchResponse == null) {
+			return matchedResults;
+		}
+
+		for (Hit<Map> hit : searchResponse.hits().hits()) {
+			try {
+				if (hit.source() != null) {
+					matchedResults.add(objectMapper.readValue(objectMapper.writeValueAsString(hit.source()),
+							ExtendedTaxonDefinition.class));
+				}
+			} catch (Exception e) {
+				logger.error(e.getMessage(), e);
+			}
+		}
+
 		return matchedResults;
 	}
 
@@ -1367,189 +1363,331 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String scientificFieldName = "name.raw";
 		String canonicalFieldName = "canonical_form.keyword";
 
-		BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
-		if (checkOnAllParam) {
-			boolQueryBuilder.must(QueryBuilders.matchQuery(scientificFieldName, scientificText).operator(Operator.AND));
-		}
-		boolQueryBuilder.must(QueryBuilders.matchPhraseQuery(canonicalFieldName, canonicalText));
-
-		SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-		searchSourceBuilder.fetchSource(null, new String[] { Constants.TIMESTAMP, Constants.VERSION });
-		searchSourceBuilder.size(10000);
-
-		SearchResponse searchResponse = null;
-		SearchRequest searchRequest = new SearchRequest(index);
 		try {
-			searchSourceBuilder.query(boolQueryBuilder);
-			searchRequest.source(searchSourceBuilder);
-			// searchResponse = client.search(searchRequest); DEPRECATED
-			searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+			BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder();
+
+			if (Boolean.TRUE.equals(checkOnAllParam)) {
+				boolQueryBuilder.must(
+						m -> m.match(mm -> mm.field(scientificFieldName).query(scientificText).operator(Operator.And)));
+			}
+
+			boolQueryBuilder.must(m -> m.matchPhrase(mp -> mp.field(canonicalFieldName).query(canonicalText)));
+
+			SearchResponse<Map> searchResponse = client.getClient()
+					.search(s -> s.index(index).size(10000).source(
+							src -> src.filter(f -> f.excludes(Arrays.asList(Constants.TIMESTAMP, Constants.VERSION))))
+							.query(boolQueryBuilder.build()._toQuery()), Map.class);
+
+			long totalHits = searchResponse.hits().total() != null ? searchResponse.hits().total().value() : 0L;
+
+			// fallback query if no results
+			if (totalHits == 0) {
+				searchResponse = client.getClient().search(
+						s -> s.index(index).size(10000)
+								.source(src -> src
+										.filter(f -> f.excludes(Arrays.asList(Constants.TIMESTAMP, Constants.VERSION))))
+								.query(q -> q.matchPhrase(mp -> mp.field(canonicalFieldName).query(canonicalText))),
+						Map.class);
+			}
+
+			totalHits = searchResponse.hits().total() != null ? searchResponse.hits().total().value() : 0L;
+
+			if (totalHits == 0) {
+				return new ArrayList<>();
+			}
+
+			return processElasticResponse(searchResponse);
+
 		} catch (Exception e) {
-			logger.error(e.getMessage());
+			logger.error("Error in matchPhrase: {}", e.getMessage(), e);
 		}
 
-		if (searchResponse != null && searchResponse.getHits().getTotalHits().value == 0) {
-			MatchPhraseQueryBuilder matchPhraseQueryBuilder = QueryBuilders.matchPhraseQuery(canonicalFieldName,
-					canonicalText);
-			try {
-				searchSourceBuilder.query(matchPhraseQueryBuilder);
-				searchRequest.source(searchSourceBuilder);
-				searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-			} catch (Exception e) {
-				logger.error(e.getMessage());
-			}
-		}
-
-		if (searchResponse != null && searchResponse.getHits().getTotalHits().value == 0)
-			return new ArrayList<>();
-
-		return processElasticResponse(searchResponse);
-
+		return new ArrayList<>();
 	}
 
-	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
-	public List<String> getListPageFilterValue(String index, String type, String filterOn, String text) {
+	public List<LinkedHashMap<String, LinkedHashMap<String, String>>> getTopUsers(String index, String type,
+			String sortingValue, Integer topUser, String timeFilter) {
 
-		List<String> results = new ArrayList<String>();
-		SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-		SearchResponse searchResponse = null;
-		SearchRequest searchRequest = new SearchRequest(index);
+		try {
+			// Step 1: Get top user IDs
+			SearchResponse<Void> firstResponse = client.getClient().search(s -> {
+				var search = s.index(index).size(0);
 
-		if (filterOn.equalsIgnoreCase("district") || filterOn.equalsIgnoreCase("tahsil")
-				|| filterOn.equalsIgnoreCase("tags")) {
-			String prefixPath = null;
-			if (filterOn.equalsIgnoreCase("tags")) {
-				prefixPath = "tags" + ".";
-				filterOn = "name";
-			} else {
-				prefixPath = "location_information" + ".";
+				if (timeFilter != null) {
+					search = search.query(q -> q.bool(
+							b -> b.filter(f -> f.range(r -> r.date(d -> d.field("created_on").gte(timeFilter))))));
+				}
+
+				return search.aggregations(Constants.GROUP_BY_AUTHOR, buildSortingAggregation(sortingValue, topUser));
+			}, Void.class);
+
+			List<Integer> topUserIds = getUserIds(firstResponse);
+
+			if (topUserIds.isEmpty()) {
+				return new ArrayList<>();
 			}
-			CompletionSuggestionBuilder completionSuggestor = SuggestBuilders
-					.completionSuggestion(prefixPath + filterOn).prefix(text).skipDuplicates(true).size(100);
-			SuggestBuilder suggestBuilder = new SuggestBuilder();
-			suggestBuilder.addSuggestion(filterOn, completionSuggestor);
-			searchSourceBuilder.suggest(suggestBuilder).fetchSource(false);
-			searchRequest.source(searchSourceBuilder);
-			try {
-				searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-				Suggestion<? extends Entry<? extends Option>> suggestions = searchResponse.getSuggest()
-						.getSuggestion(filterOn);
-				List<? extends Entry<? extends Option>> entries = suggestions.getEntries();
 
-				for (Entry<? extends Option> entry : entries) {
-					List<Suggest.Suggestion.Entry.Option> options = (List<Option>) entry.getOptions();
-					for (Suggest.Suggestion.Entry.Option option : options) {
-						results.add(option.getText().toString());
+			// Step 2: Fetch detailed aggregation for those top users
+			SearchResponse<Void> secondResponse = client.getClient().search(s -> {
+				var search = s.index(index).size(0);
+
+				search = search.query(q -> q.bool(b -> {
+					b.filter(f -> f.terms(t -> t.field(Constants.AUTHOR_ID).terms(
+							tv -> tv.value(topUserIds.stream().map(FieldValue::of).collect(Collectors.toList())))));
+
+					if (timeFilter != null) {
+						b.must(m -> m.bool(bb -> bb
+								.filter(f -> f.range(r -> r.date(d -> d.field("created_on").gte(timeFilter))))));
 					}
-				}
 
-			} catch (Exception e) {
-				logger.error(e.getMessage());
-			}
-		} else if (filterOn.equalsIgnoreCase("reconame")) {
-			String field = "all_reco_vote.scientific_name.name";
-			searchSourceBuilder.fetchSource(field, null);
-			searchSourceBuilder.size(100);
-			QueryBuilder queryBuilder = QueryBuilders.matchPhraseQuery(field, text);
-			searchSourceBuilder.query(queryBuilder);
-			searchRequest.source(searchSourceBuilder);
-			try {
-				searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-				for (SearchHit hit : searchResponse.getHits().getHits()) {
-					Collection<Object> s = hit.getSourceAsMap().values();
-					results.add(s.toString().replaceAll("[\\[\\]{}]", "").split("=")[2]);
-				}
-			} catch (Exception e) {
-				logger.error(e.getMessage());
+					return b;
+				}));
+
+				return search.aggregations(Constants.GROUP_BY_AUTHOR,
+						buildDetailedTopUserAggregation(sortingValue, topUser));
+			}, Void.class);
+
+			return processAggregationResponse(secondResponse);
+
+		} catch (Exception e) {
+			logger.error("Error in getTopUsers: {}", e.getMessage(), e);
+		}
+
+		return new ArrayList<>();
+	}
+
+	private Aggregation buildSortingAggregation(String sortingValue, Integer topUser) {
+		String sortingField = null;
+
+		var groupByAuthor = new Aggregation.Builder()
+				.terms(t -> t.field(Constants.AUTHOR_ID).size(TOTAL_USER_UPPER_BOUND));
+
+		Map<String, Aggregation> subAggs = new HashMap<>();
+
+		subAggs.put("group_by_score_category_engagement",
+				buildFilterAggregation("score_category.keyword", "Engagement"));
+
+		subAggs.put("group_by_score_category_content", buildFilterAggregation("score_category.keyword", "Content"));
+
+		if (sortingValue != null) {
+			if (sortingValue.contains(".")) {
+				sortingField = "module_activity_category.keyword";
+			} else {
+				sortingField = "module.keyword";
 			}
 
+			subAggs.put("group_by_module", buildFilterAggregation(sortingField, sortingValue));
+		}
+
+		subAggs.put(Constants.ACTIVITY_SCORE, getBucketScriptAggregation());
+		subAggs.put("bucket_sorting", getBucketSortAggregation(sortingValue, topUser));
+
+		groupByAuthor.aggregations(subAggs);
+
+		return groupByAuthor.build();
+	}
+
+	private Aggregation buildDetailedTopUserAggregation(String sortingValue, Integer topUser) {
+		String sortingField = null;
+
+		var groupByAuthor = new Aggregation.Builder()
+				.terms(t -> t.field(Constants.AUTHOR_ID).size(TOTAL_USER_UPPER_BOUND));
+
+		Map<String, Aggregation> subAggs = new HashMap<>();
+
+		subAggs.put("group_by_score_category_engagement",
+				buildFilterAggregation("score_category.keyword", "Engagement"));
+
+		subAggs.put("group_by_score_category_content", buildFilterAggregation("score_category.keyword", "Content"));
+
+		if (sortingValue != null) {
+			if (sortingValue.contains(".")) {
+				sortingField = "module_activity_category.keyword";
+			} else {
+				sortingField = "module.keyword";
+			}
+
+			subAggs.put("group_by_module", buildFilterAggregation(sortingField, sortingValue));
+		}
+
+		subAggs.put("bucket_by_module", populateDataAggregation());
+		subAggs.put(Constants.PROFILE_PIC, buildTermsAggregation("profile_pic.keyword", 100));
+		subAggs.put(Constants.AUTHOR_NAME, buildTermsAggregation("name.keyword", 100));
+		subAggs.put(Constants.ACTIVITY_SCORE, getBucketScriptAggregation());
+		subAggs.put("bucket_sorting", getBucketSortAggregation(sortingValue, topUser));
+
+		groupByAuthor.aggregations(subAggs);
+
+		return groupByAuthor.build();
+	}
+
+	private Aggregation buildTermsAggregation(String field, Integer totalBucket) {
+		return new Aggregation.Builder().terms(t -> t.field(field).size(totalBucket)).build();
+	}
+
+	private Aggregation buildFilterAggregation(String field, String fieldValue) {
+		return new Aggregation.Builder().filter(f -> f.term(t -> t.field(field).value(fieldValue))).build();
+	}
+
+	private Aggregation populateDataAggregation() {
+		Map<String, Aggregation> subAggs = new HashMap<>();
+		subAggs.put("bucket_by_activity_category", buildTermsAggregation("activity_category.keyword", 100));
+
+		return new Aggregation.Builder().terms(t -> t.field("module.keyword").size(100)).aggregations(subAggs).build();
+	}
+
+	private Aggregation getBucketScriptAggregation() {
+		Map<String, String> bucketsPathsMap = new HashMap<>();
+		bucketsPathsMap.put("engagement", "group_by_score_category_engagement>_count");
+		bucketsPathsMap.put("content", "group_by_score_category_content>_count");
+
+		String scriptText = "double content = params.content > 0 ? params.content : 1; "
+				+ "double engagement = params.engagement > 0 ? params.engagement : 1; "
+				+ "Math.round(10 * (Math.log10(content) + Math.log10(engagement)))";
+
+		return new Aggregation.Builder().bucketScript(bs -> bs.bucketsPath(bp -> bp.dict(bucketsPathsMap))
+				.script(s -> s.source(ss -> ss.scriptString(scriptText)).lang("painless"))).build();
+	}
+
+	private Aggregation getBucketSortAggregation(String sortingValue, int topUsers) {
+		String sortOnAggregation;
+
+		if (sortingValue == null) {
+			sortOnAggregation = Constants.ACTIVITY_SCORE;
 		} else {
-			String field = filterOn;
-			searchSourceBuilder.fetchSource(field, null);
-			searchSourceBuilder.size(15);
-			QueryBuilder queryBuilder = field.contentEquals("user.mobileNumber")
-					? QueryBuilders.matchPhraseQuery(field, text)
-					: QueryBuilders.matchPhrasePrefixQuery(field, text);
-			searchSourceBuilder.query(queryBuilder);
-			searchRequest.source(searchSourceBuilder);
-			try {
-				searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-				String[] resRegex = field.split("\\.");
-				for (SearchHit hit : searchResponse.getHits().getHits()) {
-					Collection<Object> s = hit.getSourceAsMap().values();
-					results.add(cleanAutoCompleteResponse(resRegex, s.toString()));
-				}
+			sortOnAggregation = "group_by_module>_count";
+		}
 
+		return new Aggregation.Builder().bucketSort(bs -> bs
+				.sort(so -> so.field(
+						f -> f.field(sortOnAggregation).order(co.elastic.clients.elasticsearch._types.SortOrder.Desc)))
+				.size(topUsers)).build();
+	}
+
+	private List<Integer> getUserIds(SearchResponse<Void> searchResponse) {
+		List<Integer> topAuthors = new ArrayList<>();
+
+		if (searchResponse.aggregations() == null) {
+			return topAuthors;
+		}
+
+		Aggregate authorAgg = searchResponse.aggregations().get(Constants.GROUP_BY_AUTHOR);
+		if (authorAgg == null || authorAgg.sterms() == null) {
+			return topAuthors;
+		}
+
+		for (StringTermsBucket bucket : authorAgg.sterms().buckets().array()) {
+			try {
+				topAuthors.add(Integer.parseInt(bucket.key().stringValue()));
 			} catch (Exception e) {
-				logger.error(e.getMessage());
+				logger.error("Error parsing user ID bucket: {}", e.getMessage(), e);
+			}
+		}
+
+		return topAuthors;
+	}
+
+	private List<LinkedHashMap<String, LinkedHashMap<String, String>>> processAggregationResponse(
+			SearchResponse<Void> searchResponse) {
+
+		List<LinkedHashMap<String, LinkedHashMap<String, String>>> records = new ArrayList<>();
+
+		if (searchResponse.aggregations() == null) {
+			return records;
+		}
+
+		Aggregate authorAgg = searchResponse.aggregations().get(Constants.GROUP_BY_AUTHOR);
+		if (authorAgg == null || authorAgg.sterms() == null) {
+			return records;
+		}
+
+		for (StringTermsBucket authorBucket : authorAgg.sterms().buckets().array()) {
+
+			LinkedHashMap<String, LinkedHashMap<String, String>> moduleRecords = new LinkedHashMap<>();
+
+			Aggregate moduleAgg = authorBucket.aggregations().get("bucket_by_module");
+			if (moduleAgg != null && moduleAgg.sterms() != null) {
+				for (StringTermsBucket moduleBucket : moduleAgg.sterms().buckets().array()) {
+
+					LinkedHashMap<String, String> activities = new LinkedHashMap<>();
+
+					Aggregate activityAgg = moduleBucket.aggregations().get("bucket_by_activity_category");
+					if (activityAgg != null && activityAgg.sterms() != null) {
+						for (StringTermsBucket activityBucket : activityAgg.sterms().buckets().array()) {
+							activities.put(activityBucket.key().stringValue().toLowerCase(),
+									String.valueOf(activityBucket.docCount()));
+						}
+					}
+
+					moduleRecords.put(moduleBucket.key().stringValue().toLowerCase(), activities);
+				}
 			}
 
+			LinkedHashMap<String, String> userDetails = new LinkedHashMap<>();
+
+			Aggregate detailTerms = authorBucket.aggregations().get(Constants.AUTHOR_NAME);
+			if (detailTerms != null && detailTerms.sterms() != null) {
+				for (StringTermsBucket bucket : detailTerms.sterms().buckets().array()) {
+					userDetails.put("authorName", bucket.key().stringValue());
+				}
+			}
+
+			userDetails.put(Constants.AUTHOR_ID, authorBucket.key().stringValue());
+
+			detailTerms = authorBucket.aggregations().get(Constants.PROFILE_PIC);
+			if (detailTerms != null && detailTerms.sterms() != null) {
+				for (StringTermsBucket bucket : detailTerms.sterms().buckets().array()) {
+					userDetails.put("profilePic", bucket.key().stringValue());
+				}
+			}
+
+			Aggregate activityScoreAgg = authorBucket.aggregations().get(Constants.ACTIVITY_SCORE);
+			if (activityScoreAgg != null && activityScoreAgg.simpleValue() != null) {
+				double score = activityScoreAgg.simpleValue().value();
+				if (score >= 0.0d) {
+					userDetails.put(Constants.ACTIVITY_SCORE, String.valueOf(score));
+				} else {
+					userDetails.put(Constants.ACTIVITY_SCORE, "0.0");
+				}
+			}
+
+			moduleRecords.put("details", userDetails);
+			records.add(moduleRecords);
 		}
-		results = (List<String>) new HashSet(results).stream().sorted().collect(Collectors.toList());
-		return results;
+
+		return records;
 	}
 
 	@Override
-	public MapResponse autocompleteUserIBP(String index, String type, String userGroupId, String name)
-			throws IOException {
+	public List<LinkedHashMap<String, LinkedHashMap<String, String>>> getUserScore(String index, String type,
+			Integer authorId, String timeFilter) {
 
-		SearchRequest searchRequest = new SearchRequest(index);
-		SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-		searchSourceBuilder.size(100);
-		BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+		try {
+			SearchResponse<Void> searchResponse = client.getClient().search(s -> {
+				var search = s.index(index).size(0);
 
-		// Add must_not nested query if userGroupId is provided
-		if (userGroupId != null && !userGroupId.isEmpty()) {
-			boolQueryBuilder.mustNot(QueryBuilders.nestedQuery(USERGROUP,
-					new TermQueryBuilder("userGroup.usergroupids", userGroupId), ScoreMode.None));
-		}
-		boolQueryBuilder.must(QueryBuilders.matchPhrasePrefixQuery("user.name", name));
+				search = search.query(q -> q.bool(b -> {
+					b.filter(f -> f.term(t -> t.field(Constants.AUTHOR_ID).value(authorId)));
 
-		searchSourceBuilder.query(boolQueryBuilder);
-		searchRequest.source(searchSourceBuilder);
+					if (timeFilter != null) {
+						b.must(m -> m.bool(bb -> bb
+								.filter(f -> f.range(r -> r.date(d -> d.field("created_on").gte(timeFilter))))));
+					}
 
-		SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-		List<MapDocument> result = new ArrayList<>();
+					return b;
+				}));
 
-		for (SearchHit hit : searchResponse.getHits().getHits()) {
-			result.add(new MapDocument(hit.getSourceAsString()));
-		}
+				return search.aggregations(Constants.GROUP_BY_AUTHOR, buildDetailedTopUserAggregation(null, 1));
+			}, Void.class);
 
-		long totalHits = searchResponse.getHits().getTotalHits().value;
+			return processAggregationResponse(searchResponse);
 
-		return new MapResponse(result, totalHits, null);
-
-	}
-
-	@Override
-	public MapResponse autocompleteSpeciesContributors(String index, String type, String name) throws IOException {
-
-		SearchRequest searchRequest = new SearchRequest(index);
-		SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-		searchSourceBuilder.size(10);
-		BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
-
-		// Must have role "SPECIES CONTRIBUTOR" in taxonomy
-		boolQueryBuilder.must(QueryBuilders.nestedQuery("taxonomy",
-				QueryBuilders.termQuery("taxonomy.role.keyword", "SPECIES CONTRIBUTOR"), ScoreMode.None));
-
-		// Name matching for autocomplete
-		boolQueryBuilder.must(QueryBuilders.matchPhrasePrefixQuery("user.name", name));
-
-		searchSourceBuilder.query(boolQueryBuilder);
-		searchRequest.source(searchSourceBuilder);
-
-		SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-		List<MapDocument> result = new ArrayList<>();
-
-		for (SearchHit hit : searchResponse.getHits().getHits()) {
-			result.add(new MapDocument(hit.getSourceAsString()));
+		} catch (Exception e) {
+			logger.error("Error in getUserScore: {}", e.getMessage(), e);
 		}
 
-		long totalHits = searchResponse.getHits().getTotalHits().value;
-
-		return new MapResponse(result, totalHits, null);
+		return new ArrayList<>();
 	}
 
 	private String cleanAutoCompleteResponse(String[] resRegex, String text) {
@@ -1561,224 +1699,97 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	}
 
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
-	public List<LinkedHashMap<String, LinkedHashMap<String, String>>> getUserScore(String index, String type,
-			Integer authorId, String timeFilter) {
-		try {
-			AggregationBuilder aggs = buildSortingAggregation(1, null);
+	public List<String> getListPageFilterValue(String index, String type, String filterOn, String text) {
 
-			QueryBuilder rangeFilter = new RangeQueryBuilder("created_on").gte(timeFilter);
-			QueryBuilder queryBuilder = QueryBuilders.boolQuery()
-					.filter(QueryBuilders.termQuery(Constants.AUTHOR_ID, authorId))
-					.must(QueryBuilders.boolQuery().filter(rangeFilter));
-			SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-			aggs.subAggregation(populateDataAggregation());
-			aggs.subAggregation(termsAggregation(Constants.PROFILE_PIC, "profile_pic.keyword"));
-			aggs.subAggregation(termsAggregation(Constants.AUTHOR_NAME, "name.keyword"));
-			searchSourceBuilder.aggregation(aggs);
-			searchSourceBuilder.query(queryBuilder);
-			searchSourceBuilder.size(0);
-			SearchRequest searchRequest = new SearchRequest(index);
-			SearchResponse searchResponse = null;
-			searchRequest.source(searchSourceBuilder);
-			try {
-				searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-			} catch (Exception e) {
-				logger.error(e.getMessage());
-			}
-			return processAggregationResponse(searchResponse);
-		} catch (Exception e) {
-			logger.error(e.getMessage());
-		}
-		return null;
-
-	}
-
-	@Override
-	public List<LinkedHashMap<String, LinkedHashMap<String, String>>> getTopUsers(String index, String type,
-			String sortingValue, Integer topUser, String timeFilter) {
-		// For Filtering the records based on the time frame
-		QueryBuilder rangeFilter = new RangeQueryBuilder("created_on").gte(timeFilter);
-		QueryBuilder filterByDate = QueryBuilders.boolQuery().must(QueryBuilders.boolQuery().filter(rangeFilter));
-
-		SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-		AggregationBuilder aggs = buildSortingAggregation(topUser, sortingValue);
-		searchSourceBuilder.aggregation(aggs);
-		if (timeFilter != null)
-			searchSourceBuilder.query(filterByDate);
-		searchSourceBuilder.size(0);
-		SearchRequest searchRequest = new SearchRequest(index);
-		searchRequest.source(searchSourceBuilder);
-
-		SearchResponse searchResponse = null;
-		try {
-			searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-		} catch (IOException e) {
-			logger.error(e.getMessage());
-		}
-		// processAggregationResponse(searchRespone)
-		List<Integer> topUserIds = new ArrayList<>();
-		if (searchResponse != null) {
-			topUserIds.addAll(getUserIds(searchResponse));
-		}
-
-		// added the must part in the previous below query builder
-		QueryBuilder queryBuilder = QueryBuilders.boolQuery()
-				.filter(QueryBuilders.termsQuery(Constants.AUTHOR_ID, topUserIds))
-				.must(QueryBuilders.boolQuery().filter(rangeFilter));
-
-		searchSourceBuilder = new SearchSourceBuilder();
-		aggs.subAggregation(populateDataAggregation());
-		aggs.subAggregation(termsAggregation(Constants.PROFILE_PIC, "profile_pic.keyword"));
-		aggs.subAggregation(termsAggregation(Constants.AUTHOR_NAME, "name.keyword"));
-		searchSourceBuilder.aggregation(aggs);
-		searchSourceBuilder.query(queryBuilder);
-		searchSourceBuilder.size(0);
-		searchRequest.source(searchSourceBuilder);
+		List<String> results = new ArrayList<>();
 
 		try {
-			searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-		} catch (IOException e) {
-			logger.info(e.getMessage());
-		}
-		return processAggregationResponse(searchResponse);
-	}
+			if (filterOn.equalsIgnoreCase("district") || filterOn.equalsIgnoreCase("tahsil")
+					|| filterOn.equalsIgnoreCase("tags")) {
 
-	private AggregationBuilder buildSortingAggregation(Integer topUser, String sortingValue) {
-		String sortingField = null;
-		AggregationBuilder aggs = termsAggregation(Constants.GROUP_BY_AUTHOR, Constants.AUTHOR_ID,
-				TOTAL_USER_UPPER_BOUND);
-		aggs.subAggregation(
-				filterAggregation("group_by_score_category_engagement", "score_category.keyword", "Engagement"));
-		aggs.subAggregation(filterAggregation("group_by_score_category_content", "score_category.keyword", "Content"));
-		if (sortingValue != null) {
-			if (sortingValue.contains(".")) {
-				sortingField = "module_activity_category.keyword";
-			} else {
-				sortingField = "module.keyword";
-			}
-			aggs.subAggregation(filterAggregation("group_by_module", sortingField, sortingValue));
-		}
+				String prefixPath;
+				String actualField = filterOn;
+				String finalSuggestionName;
 
-		aggs.subAggregation(getBucketScriptAggregation());
-		aggs.subAggregation(getBucketSortAggregation(sortingValue, topUser));
-		return aggs;
-	}
-
-	private AggregationBuilder populateDataAggregation() {
-
-		return termsAggregation("bucket_by_module", "module.keyword")
-				.subAggregation(termsAggregation("bucket_by_activity_category", "activity_category.keyword"));
-	}
-
-	private AggregationBuilder termsAggregation(String aggregationName, String field, Integer totalBucket) {
-		return AggregationBuilders.terms(aggregationName).field(field).size(totalBucket);
-	}
-
-	private AggregationBuilder termsAggregation(String aggregationName, String field) {
-		return AggregationBuilders.terms(aggregationName).field(field).size(100);
-	}
-
-	private AggregationBuilder filterAggregation(String aggregationName, String field, String fieldValue) {
-		return AggregationBuilders.filter(aggregationName, QueryBuilders.termQuery(field, fieldValue));
-	}
-
-	private BucketScriptPipelineAggregationBuilder getBucketScriptAggregation() {
-		Map<String, String> bucketsPathsMap = new HashMap<>();
-		bucketsPathsMap.put("engagement", "group_by_score_category_engagement>_count");
-		bucketsPathsMap.put("content", "group_by_score_category_content>_count");
-		Script script = new Script("Math.round(10*(Math.log10(params.content)+Math.log10(params.engagement)))");
-
-		return PipelineAggregatorBuilders.bucketScript(Constants.ACTIVITY_SCORE, bucketsPathsMap, script);
-	}
-
-	private BucketSortPipelineAggregationBuilder getBucketSortAggregation(String sortingValue, int topUsers) {
-		List<FieldSortBuilder> sortingCriteriaList = new ArrayList<FieldSortBuilder>();
-		String sortOnAggregation = null;
-		if (sortingValue == null) {
-			sortOnAggregation = Constants.ACTIVITY_SCORE;
-		} else {
-			sortOnAggregation = "group_by_module" + ">_count";
-		}
-
-		FieldSortBuilder sortOn = new FieldSortBuilder(sortOnAggregation).order(SortOrder.DESC);
-		sortingCriteriaList.add(sortOn);
-
-		return PipelineAggregatorBuilders.bucketSort("bucket_sorting", sortingCriteriaList).size(topUsers);
-
-	}
-
-	private List<ExtendedTaxonDefinition> processElasticResponse(SearchResponse searchResponse) {
-		List<ExtendedTaxonDefinition> matchedResults = new ArrayList<ExtendedTaxonDefinition>();
-		if (searchResponse == null) {
-			return matchedResults;
-		}
-		for (SearchHit hit : searchResponse.getHits().getHits()) {
-			try {
-				matchedResults.add(objectMapper.readValue(hit.getSourceAsString(), ExtendedTaxonDefinition.class));
-			} catch (Exception e) {
-				logger.error(e.getMessage());
-			}
-		}
-		return matchedResults;
-	}
-
-	private List<Integer> getUserIds(SearchResponse searchResponse) {
-		Terms authorTerms = searchResponse.getAggregations().get(Constants.GROUP_BY_AUTHOR);
-		Collection<? extends Bucket> authorBuckets = authorTerms.getBuckets();
-		List<Integer> topAuthors = new ArrayList<Integer>();
-		for (Bucket authorBucket : authorBuckets) {
-			topAuthors.add(authorBucket.getKeyAsNumber().intValue());
-		}
-		return topAuthors;
-
-	}
-
-	private List<LinkedHashMap<String, LinkedHashMap<String, String>>> processAggregationResponse(
-			SearchResponse searchResponse) {
-		List<LinkedHashMap<String, LinkedHashMap<String, String>>> records = new ArrayList<LinkedHashMap<String, LinkedHashMap<String, String>>>();
-
-		Terms authorTerms = searchResponse.getAggregations().get(Constants.GROUP_BY_AUTHOR);
-		Collection<? extends Bucket> authorBuckets = authorTerms.getBuckets();
-
-		for (Bucket authorBucket : authorBuckets) {
-
-			Terms moduleTerms = authorBucket.getAggregations().get("bucket_by_module");
-			Collection<? extends Bucket> moduleBuckets = moduleTerms.getBuckets();
-			LinkedHashMap<String, LinkedHashMap<String, String>> moduleRecords = new LinkedHashMap<String, LinkedHashMap<String, String>>();
-
-			for (Bucket moduleBucket : moduleBuckets) {
-				Terms activityTerms = moduleBucket.getAggregations().get("bucket_by_activity_category");
-				Collection<? extends Bucket> activityBuckets = activityTerms.getBuckets();
-				LinkedHashMap<String, String> activities = new LinkedHashMap<String, String>();
-
-				for (Bucket activityBucket : activityBuckets) {
-					activities.put(activityBucket.getKeyAsString().toLowerCase(),
-							String.valueOf(activityBucket.getDocCount()));
+				if (filterOn.equalsIgnoreCase("tags")) {
+					prefixPath = "tags.";
+					actualField = "name";
+					finalSuggestionName = "tags";
+				} else {
+					prefixPath = "location_information.";
+					finalSuggestionName = filterOn;
 				}
-				moduleRecords.put(moduleBucket.getKeyAsString().toLowerCase(), activities);
-			}
-			LinkedHashMap<String, String> userDetails = new LinkedHashMap<String, String>();
 
-			Terms detailTerms = authorBucket.getAggregations().get(Constants.AUTHOR_NAME);
-			for (Bucket bucket : detailTerms.getBuckets()) {
-				userDetails.put("authorName", bucket.getKeyAsString());
-			}
-			userDetails.put(Constants.AUTHOR_ID, authorBucket.getKeyAsString());
-			detailTerms = authorBucket.getAggregations().get(Constants.PROFILE_PIC);
-			for (Bucket bucket : detailTerms.getBuckets()) {
-				userDetails.put("profilePic", bucket.getKeyAsString());
-			}
-			ParsedSimpleValue activityScoreTerms = authorBucket.getAggregations().get(Constants.ACTIVITY_SCORE);
-			if (Double.parseDouble(activityScoreTerms.getValueAsString()) >= 0.0d) {
-				userDetails.put(activityScoreTerms.getName(), activityScoreTerms.getValueAsString());
+				String suggestField = prefixPath + actualField;
+
+				SearchResponse<Void> searchResponse = client.getClient().search(
+						s -> s.index(index).source(src -> src.filter(f -> f.includes(Collections.emptyList())))
+								.suggest(sg -> sg.suggesters(finalSuggestionName,
+										sug -> sug.prefix(text).completion(
+												c -> c.field(suggestField).skipDuplicates(true).size(100)))),
+						Void.class);
+
+				if (searchResponse.suggest() != null && searchResponse.suggest().get(finalSuggestionName) != null
+						&& !searchResponse.suggest().get(finalSuggestionName).isEmpty()) {
+
+					List<Suggestion<Void>> suggestions = searchResponse.suggest().get(finalSuggestionName);
+
+					for (Suggestion<Void> suggestion : suggestions) {
+						if (suggestion.completion() != null) {
+							for (CompletionSuggestOption<Void> option : suggestion.completion().options()) {
+								if (option.text() != null) {
+									results.add(option.text());
+								}
+							}
+						}
+					}
+				}
+
+			} else if (filterOn.equalsIgnoreCase("reconame")) {
+
+				String field = "all_reco_vote.scientific_name.name";
+
+				SearchResponse<Map> searchResponse = client.getClient()
+						.search(s -> s.index(index).size(100).source(src -> src.filter(f -> f.includes(field)))
+								.query(q -> q.matchPhrase(m -> m.field(field).query(text))), Map.class);
+
+				for (Hit<Map> hit : searchResponse.hits().hits()) {
+					if (hit.source() != null) {
+						Collection<Object> values = hit.source().values();
+						results.add(values.toString().replaceAll("[\\[\\]{}]", "").split("=")[2]);
+					}
+				}
+
 			} else {
-				userDetails.put(activityScoreTerms.getName(), "0.0");
+
+				String field = filterOn;
+				final String finalField = field;
+
+				SearchResponse<Map> searchResponse = client
+						.getClient().search(
+								s -> s.index(index).size(15).source(src -> src.filter(f -> f.includes(finalField)))
+										.query(q -> finalField.contentEquals("user.mobileNumber")
+												? q.matchPhrase(m -> m.field(finalField).query(text))
+												: q.matchPhrasePrefix(m -> m.field(finalField).query(text))),
+								Map.class);
+
+				String[] resRegex = field.split("\\.");
+
+				for (Hit<Map> hit : searchResponse.hits().hits()) {
+					if (hit.source() != null) {
+						Collection<Object> values = hit.source().values();
+						results.add(cleanAutoCompleteResponse(resRegex, values.toString()));
+					}
+				}
 			}
-			moduleRecords.put("details", userDetails);
-			records.add(moduleRecords);
+
+		} catch (Exception e) {
+			logger.error("Error in getListPageFilterValue: {}", e.getMessage(), e);
 		}
-		return records;
+
+		return results.stream().distinct().sorted().collect(Collectors.toList());
 	}
 
 	@Override
@@ -1789,36 +1800,45 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		try {
 			MapSearchParams searchParams = searchQuery.getSearchParams();
-			BoolQueryBuilder masterBoolQuery = getBoolQueryBuilder(searchQuery);
 
-			GeoGridAggregationBuilder geoGridAggregationBuilder = getGeoGridAggregationBuilder(geoAggregationField,
-					geoAggegationPrecision);
+			BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder();
+			Query searchQueryDsl = getBoolQuery(searchQuery);
+			if (searchQueryDsl != null) {
+				boolQueryBuilder.must(searchQueryDsl);
+			}
 
-			applyMapBounds(searchParams, masterBoolQuery, geoAggregationField);
+			applyMapBounds(searchParams, boolQueryBuilder, geoAggregationField);
 
-			SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-			if (masterBoolQuery != null)
-				sourceBuilder.query(masterBoolQuery);
-			sourceBuilder.aggregation(geoGridAggregationBuilder);
-			sourceBuilder.trackTotalHits(true);
+			Query finalQuery = boolQueryBuilder.build()._toQuery();
 
-			SearchRequest searchRequest = new SearchRequest(index);
-			searchRequest.source(sourceBuilder);
-			SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-			Long totalCount = searchResponse.getHits().getTotalHits().value;
-			Map<String, Long> geoHashData = new HashMap<String, Long>();
+			String aggName = geoAggregationField + "-" + geoAggegationPrecision;
 
-			Aggregations aggregations = searchResponse.getAggregations();
-			ParsedGeoHashGrid geoHashGrid = aggregations.get(geoAggregationField + "-" + geoAggegationPrecision);
+			SearchResponse<Void> searchResponse = client.getClient().search(s -> {
+				var search = s.index(index).trackTotalHits(t -> t.enabled(true)).size(0);
 
-			for (GeoGrid.Bucket b : geoHashGrid.getBuckets()) {
-				geoHashData.put(b.getKeyAsString(), b.getDocCount());
+				if (finalQuery != null) {
+					search = search.query(finalQuery);
+				}
+
+				return search.aggregations(aggName, a -> a.geohashGrid(g -> g.field(geoAggregationField)
+						.precision(GeoHashPrecision.of(p -> p.geohashLength(geoAggegationPrecision)))));
+			}, Void.class);
+
+			Long totalCount = searchResponse.hits().total() != null ? searchResponse.hits().total().value() : 0L;
+
+			Map<String, Long> geoHashData = new HashMap<>();
+
+			Aggregate aggregate = searchResponse.aggregations().get(aggName);
+			if (aggregate != null && aggregate.geohashGrid() != null) {
+				for (GeoHashGridBucket bucket : aggregate.geohashGrid().buckets().array()) {
+					geoHashData.put(bucket.key(), bucket.docCount());
+				}
 			}
 
 			geoHashAggData = new GeoHashAggregationData(geoHashData, totalCount);
 
-		} catch (IOException e) {
-			logger.error(e.getMessage());
+		} catch (Exception e) {
+			logger.error("Error in getNewGeoAggregation: {}", e.getMessage(), e);
 		}
 
 		return geoHashAggData;
@@ -1827,106 +1847,210 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	@Override
 	public FilterPanelData getListPanel(String index, String type) {
 		try {
+			SearchResponse<Void> response = client.getClient().search(s -> s.index(index).size(0)
+					.aggregations("speciesGroup",
+							buildTermsAggregationWithOrder("sgroup_filter.keyword", 100, true, false))
+					.aggregations(USERGROUP,
+							buildTermsAggregationWithOrder("user_group_observations.ug_filter.keyword", 100, false,
+									true))
+					.aggregations("trait",
+							buildTermsAggregationWithOrder("facts.trait_value.trait_filter.keyword", 1000, true, false))
+					.aggregations("state",
+							buildTermsAggregationWithOrder("location_information.state.keyword", 100, true, false))
+					.aggregations("customField",
+							buildTermsAggregationWithOrder(
+									"custom_fields.custom_field.custom_field_values.custom_field_filter.keyword", 1000,
+									true, false)),
+					Void.class);
 
-			AggregationBuilder speciesGroupAggregation = AggregationBuilders.terms("speciesGroup")
-					.field("sgroup_filter.keyword").size(100).order(BucketOrder.key(true));
-			AggregationBuilder userGroupAgregation = AggregationBuilders.terms(USERGROUP)
-					.field("user_group_observations.ug_filter.keyword").size(100).order(BucketOrder.count(false));
-			AggregationBuilder stateAggregation = AggregationBuilders.terms("state")
-					.field("location_information.state.keyword").size(100).order(BucketOrder.key(true));
-			AggregationBuilder traitAggregation = AggregationBuilders.terms("trait")
-					.field("facts.trait_value.trait_filter.keyword").size(1000).order(BucketOrder.key(true));
-			AggregationBuilder cfAggregation = AggregationBuilders.terms("customField")
-					.field("custom_fields.custom_field.custom_field_values.custom_field_filter.keyword").size(1000)
-					.order(BucketOrder.key(true));
-
-			SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-			sourceBuilder.aggregation(speciesGroupAggregation);
-			sourceBuilder.aggregation(userGroupAgregation);
-			sourceBuilder.aggregation(traitAggregation);
-			sourceBuilder.aggregation(stateAggregation);
-			sourceBuilder.aggregation(cfAggregation);
-
-			SearchRequest request = new SearchRequest(index);
-			request.source(sourceBuilder);
-
-			SearchResponse response = client.search(request, RequestOptions.DEFAULT);
 			FilterPanelData filterPanel = new FilterPanelData();
 
-			filterPanel.setSpeciesGroup(getAggregationSpeciesGroup(response.getAggregations().get("speciesGroup")));
-			filterPanel.setStates(getAggregationList(response.getAggregations().get("state")));
-			filterPanel.setUserGroup(getAggregationUserGroup(response.getAggregations().get(USERGROUP)));
-			filterPanel.setTraits(getTraits(response.getAggregations().get("trait")));
-			filterPanel.setCustomFields(getCustomFields(response.getAggregations().get("customField")));
-			return filterPanel;
-		} catch (Exception e) {
-			logger.error(e.getMessage());
-		}
-		return null;
+			filterPanel.setSpeciesGroup(getAggregationSpeciesGroup(response.aggregations().get("speciesGroup")));
+			filterPanel.setStates(getAggregationList(response.aggregations().get("state")));
+			filterPanel.setUserGroup(getAggregationUserGroup(response.aggregations().get(USERGROUP)));
+			filterPanel.setTraits(getTraits(response.aggregations().get("trait")));
+			filterPanel.setCustomFields(getCustomFields(response.aggregations().get("customField")));
 
+			return filterPanel;
+
+		} catch (Exception e) {
+			logger.error("Error in getListPanel: {}", e.getMessage(), e);
+		}
+
+		return null;
 	}
 
-	private List<String> getAggregationList(Terms terms) {
-		List<String> resultList = new ArrayList<String>();
-		for (Terms.Bucket b : terms.getBuckets()) {
-			resultList.add(b.getKeyAsString());
+	private Aggregation buildTermsAggregationWithOrder(String field, int size, boolean orderByKeyAsc,
+			boolean orderByCountDesc) {
+
+		List<NamedValue<co.elastic.clients.elasticsearch._types.SortOrder>> orderList = new ArrayList<>();
+
+		if (orderByKeyAsc) {
+			orderList.add(NamedValue.of("_key", co.elastic.clients.elasticsearch._types.SortOrder.Asc));
 		}
+
+		if (orderByCountDesc) {
+			orderList.add(NamedValue.of("_count", co.elastic.clients.elasticsearch._types.SortOrder.Desc));
+		}
+
+		return new Aggregation.Builder().terms(t -> {
+			t.field(field).size(size);
+			if (!orderList.isEmpty()) {
+				t.order(orderList);
+			}
+			return t;
+		}).build();
+	}
+
+	private List<String> getAggregationList(Aggregate aggregate) {
+		List<String> resultList = new ArrayList<>();
+
+		if (aggregate == null || aggregate.sterms() == null) {
+			return resultList;
+		}
+
+		for (StringTermsBucket b : aggregate.sterms().buckets().array()) {
+			resultList.add(b.key().stringValue());
+		}
+
 		return resultList;
 	}
 
-	private List<SpeciesGroup> getAggregationSpeciesGroup(Terms terms) {
-		List<SpeciesGroup> sGroup = new ArrayList<SpeciesGroup>();
-		for (Terms.Bucket b : terms.getBuckets()) {
-			// pattern = sgroupId | sgroupName | sGroupOrder
-			String[] sGroupArray = b.getKeyAsString().split("\\|");
-			sGroup.add(
-					new SpeciesGroup(Long.parseLong(sGroupArray[0]), sGroupArray[1], Integer.parseInt(sGroupArray[2])));
+	private List<SpeciesGroup> getAggregationSpeciesGroup(Aggregate aggregate) {
+		List<SpeciesGroup> sGroup = new ArrayList<>();
+
+		if (aggregate == null || aggregate.sterms() == null) {
+			return sGroup;
 		}
+
+		for (StringTermsBucket b : aggregate.sterms().buckets().array()) {
+			// pattern = sgroupId | sgroupName | sGroupOrder
+			String[] sGroupArray = b.key().stringValue().split("\\|");
+
+			if (sGroupArray.length >= 3) {
+				sGroup.add(new SpeciesGroup(Long.parseLong(sGroupArray[0]), sGroupArray[1],
+						Integer.parseInt(sGroupArray[2])));
+			}
+		}
+
 		return sGroup;
 	}
 
-	private List<UserGroup> getAggregationUserGroup(Terms terms) {
-		List<UserGroup> userGroup = new ArrayList<UserGroup>();
-		for (Terms.Bucket b : terms.getBuckets()) {
-			// pattern = usergroupId | userGroupName |domain name | webaddress
-			String[] ugArray = b.getKeyAsString().split("\\|");
-			String webAddress = "";
-			if (ugArray[2].length() != 0)
-				webAddress = ugArray[2];
-			else
-				webAddress = "/group/" + ugArray[3];
-			userGroup.add(new UserGroup(Long.parseLong(ugArray[0]), ugArray[1], webAddress));
+	private List<UserGroup> getAggregationUserGroup(Aggregate aggregate) {
+		List<UserGroup> userGroup = new ArrayList<>();
+
+		if (aggregate == null || aggregate.sterms() == null) {
+			return userGroup;
 		}
+
+		for (StringTermsBucket b : aggregate.sterms().buckets().array()) {
+			// pattern = usergroupId | userGroupName | domain name | webaddress
+			String[] ugArray = b.key().stringValue().split("\\|");
+
+			if (ugArray.length >= 4) {
+				String webAddress;
+				if (ugArray[2] != null && ugArray[2].length() != 0) {
+					webAddress = ugArray[2];
+				} else {
+					webAddress = "/group/" + ugArray[3];
+				}
+
+				userGroup.add(new UserGroup(Long.parseLong(ugArray[0]), ugArray[1], webAddress));
+			}
+		}
+
 		return userGroup;
 	}
 
-	private List<Traits> getTraits(Terms terms) {
-		Map<Long, Traits> traitMap = new TreeMap<Long, Traits>();
-		List<Traits> traits = new ArrayList<Traits>();
-		for (Terms.Bucket b : terms.getBuckets()) {
-			String[] traitArray = b.getKeyAsString().split("\\|");
+	private List<Traits> getTraits(Aggregate aggregate) {
+		Map<Long, Traits> traitMap = new TreeMap<>();
+		List<Traits> traits = new ArrayList<>();
+
+		if (aggregate == null || aggregate.sterms() == null) {
+			return traits;
+		}
+
+		for (StringTermsBucket b : aggregate.sterms().buckets().array()) {
+			String[] traitArray = b.key().stringValue().split("\\|");
 			// pattern = traitID | traitName | traitType | traitValue | TraitValueIconURL
 
-			if (traitMap.containsKey(Long.parseLong(traitArray[0]))) {
-				Traits traitMapped = traitMap.get(Long.parseLong(traitArray[0]));
-				List<TraitValue> valueList = traitMapped.getTraitValues();
-				valueList.add(new TraitValue(traitArray[3], traitArray[4]));
-				traitMapped.setTraitValues(valueList);
-				traitMap.put(Long.parseLong(traitArray[0]), traitMapped);
-			} else {
-				List<TraitValue> valueList = new ArrayList<TraitValue>();
-				valueList.add(new TraitValue(traitArray[3], traitArray[4]));
-				Traits traitsMapped = new Traits(Long.parseLong(traitArray[0]), traitArray[1], traitArray[2],
-						valueList);
+			if (traitArray.length >= 5) {
+				Long traitId = Long.parseLong(traitArray[0]);
 
-				traitMap.put(Long.parseLong(traitArray[0]), traitsMapped);
+				if (traitMap.containsKey(traitId)) {
+					Traits traitMapped = traitMap.get(traitId);
+					List<TraitValue> valueList = traitMapped.getTraitValues();
+					valueList.add(new TraitValue(traitArray[3], traitArray[4]));
+					traitMapped.setTraitValues(valueList);
+					traitMap.put(traitId, traitMapped);
+				} else {
+					List<TraitValue> valueList = new ArrayList<>();
+					valueList.add(new TraitValue(traitArray[3], traitArray[4]));
+
+					Traits traitsMapped = new Traits(traitId, traitArray[1], traitArray[2], valueList);
+
+					traitMap.put(traitId, traitsMapped);
+				}
 			}
-
 		}
-		for (java.util.Map.Entry<Long, Traits> entry : traitMap.entrySet()) {
+
+		for (Map.Entry<Long, Traits> entry : traitMap.entrySet()) {
 			traits.add(entry.getValue());
 		}
+
 		return traits;
+	}
+
+	private List<CustomFields> getCustomFields(Aggregate aggregate) {
+		Map<Long, CustomFields> customFieldMap = new TreeMap<>();
+		List<CustomFields> customFieldList = new ArrayList<>();
+
+		if (aggregate == null || aggregate.sterms() == null) {
+			return customFieldList;
+		}
+
+		for (StringTermsBucket b : aggregate.sterms().buckets().array()) {
+			String[] customFieldArray = b.key().stringValue().split("\\|");
+			// pattern = cfId | cfName | cfFieldType | cfDataType | cfValueIcon | cfValue
+
+			if (customFieldArray.length >= 6) {
+				Long customFieldId = Long.parseLong(customFieldArray[0]);
+
+				if (customFieldMap.containsKey(customFieldId)) {
+					CustomFields customFieldMapped = customFieldMap.get(customFieldId);
+					List<CustomFieldValues> valueList = customFieldMapped.getValues();
+
+					if (!customFieldArray[2].equalsIgnoreCase("FIELD TEXT")) {
+						if (valueList == null) {
+							valueList = new ArrayList<>();
+						}
+						valueList.add(new CustomFieldValues(customFieldArray[5], customFieldArray[4]));
+					}
+
+					customFieldMapped.setValues(valueList);
+					customFieldMap.put(customFieldId, customFieldMapped);
+
+				} else {
+					List<CustomFieldValues> values = null;
+
+					if (!customFieldArray[2].equalsIgnoreCase("FIELD TEXT")) {
+						values = new ArrayList<>();
+						values.add(new CustomFieldValues(customFieldArray[5], customFieldArray[4]));
+					}
+
+					CustomFields customFieldMapped = new CustomFields(customFieldId, customFieldArray[1],
+							customFieldArray[2], customFieldArray[3], values);
+
+					customFieldMap.put(customFieldId, customFieldMapped);
+				}
+			}
+		}
+
+		for (Map.Entry<Long, CustomFields> entry : customFieldMap.entrySet()) {
+			customFieldList.add(entry.getValue());
+		}
+
+		return customFieldList;
 	}
 
 	private String toTitleCase(String input) {
@@ -1947,73 +2071,32 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		return titleCase.toString();
 	}
 
-	private List<CustomFields> getCustomFields(Terms terms) {
-		Map<Long, CustomFields> customFieldMap = new TreeMap<Long, CustomFields>();
-		List<CustomFields> customFieldList = new ArrayList<CustomFields>();
-
-		for (Terms.Bucket b : terms.getBuckets()) {
-			String[] customFieldArray = b.getKeyAsString().split("\\|");
-			// pattern = cfId | cfName | cfFieldType | cfDataType | cfValueIcon |cfValue
-
-			if (customFieldMap.containsKey(Long.parseLong(customFieldArray[0]))) {
-
-				CustomFields customFieldMapped = customFieldMap.get(Long.parseLong(customFieldArray[0]));
-				List<CustomFieldValues> valueList = customFieldMapped.getValues();
-				if (!customFieldArray[2].equalsIgnoreCase("FIELD TEXT")) {
-					valueList.add(new CustomFieldValues(customFieldArray[5], customFieldArray[4]));
-				}
-				customFieldMapped.setValues(valueList);
-				customFieldMap.put(Long.parseLong(customFieldArray[0]), customFieldMapped);
-
-			} else {
-				List<CustomFieldValues> values = null;
-				if (!customFieldArray[2].equalsIgnoreCase("FIELD TEXT")) {
-					values = new ArrayList<CustomFieldValues>();
-					values.add(new CustomFieldValues(customFieldArray[5], customFieldArray[4]));
-				}
-				CustomFields customFieldMapped = new CustomFields(Long.parseLong(customFieldArray[0]),
-						customFieldArray[1], customFieldArray[2], customFieldArray[3], values);
-				customFieldMap.put(Long.parseLong(customFieldArray[0]), customFieldMapped);
-			}
-		}
-		for (java.util.Map.Entry<Long, CustomFields> entry : customFieldMap.entrySet()) {
-			customFieldList.add(entry.getValue());
-		}
-
-		return customFieldList;
-	}
-
 	@Override
 	public List<ObservationLatLon> getSpeciesCoordinates(String index, String type, String speciesId) {
 
 		try {
-			BoolQueryBuilder query = QueryBuilders.boolQuery()
-					.must(QueryBuilders.termsQuery("max_voted_reco.species_id", speciesId));
+			SearchResponse<Map> response = client.getClient()
+					.search(s -> s.index(index).size(10000)
+							.source(src -> src.filter(f -> f.includes(Constants.OBSERVATION_ID, Constants.LOCATION)))
+							.query(q -> q.term(t -> t.field("max_voted_reco.species_id").value(speciesId))), Map.class);
 
-			SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-			sourceBuilder.query(query);
-			sourceBuilder.size(10000);
-			String[] includes = { Constants.OBSERVATION_ID, Constants.LOCATION };
-			sourceBuilder.fetchSource(includes, null);
-			SearchRequest request = new SearchRequest(index);
-			request.source(sourceBuilder);
-			SearchResponse response = client.search(request, RequestOptions.DEFAULT);
-			List<ObservationLatLon> obvList = new ArrayList<ObservationLatLon>();
+			List<ObservationLatLon> obvList = new ArrayList<>();
 
-			for (SearchHit hit : response.getHits().getHits()) {
+			for (Hit<Map> hit : response.hits().hits()) {
+				if (hit.source() != null) {
+					Location loc = objectMapper.readValue(
+							objectMapper.writeValueAsString(hit.source().get(Constants.LOCATION)), Location.class);
 
-				Location loc = objectMapper.readValue(
-						objectMapper.writeValueAsString(hit.getSourceAsMap().get(Constants.LOCATION)), Location.class);
-
-				obvList.add(new ObservationLatLon(
-						Long.parseLong(hit.getSourceAsMap().get(Constants.OBSERVATION_ID).toString()), loc.getLat(),
-						loc.getLon()));
-
+					obvList.add(
+							new ObservationLatLon(Long.parseLong(hit.source().get(Constants.OBSERVATION_ID).toString()),
+									loc.getLat(), loc.getLon()));
+				}
 			}
+
 			return obvList;
 
 		} catch (Exception e) {
-			logger.error(e.getMessage());
+			logger.error("Error in getSpeciesCoordinates: {}", e.getMessage(), e);
 		}
 
 		return new ArrayList<>();
@@ -2022,30 +2105,32 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	@SuppressWarnings("unchecked")
 	@Override
 	public String fetchIndex() {
-		Map<String, Set<String>> indexOuterLevelProperties = new HashMap<String, Set<String>>();
-		try {
-			GetMappingsRequest mappingsRequest = new GetMappingsRequest();
-			mappingsRequest.indices();
-			mappingsRequest.indicesOptions(IndicesOptions.lenientExpandOpen());
-			GetMappingsResponse getMappingResponse = client.indices().getMapping(mappingsRequest,
-					RequestOptions.DEFAULT);
-			Map<String, MappingMetadata> allMappings = getMappingResponse.mappings();
+		Map<String, Set<String>> indexOuterLevelProperties = new HashMap<>();
 
-			for (Map.Entry<String, MappingMetadata> index : allMappings.entrySet()) {
-				if (!(index.getKey().startsWith("."))) {
-					MappingMetadata indexMapping = index.getValue();
-					Map<String, Object> mapping = indexMapping.sourceAsMap();
-					LinkedHashMap<String, Object> properties = (LinkedHashMap<String, Object>) mapping
-							.get("properties");
-					if (properties != null) {
-						indexOuterLevelProperties.put(index.getKey(), properties.keySet());
+		try {
+			GetMappingResponse getMappingResponse = client.getClient().indices().getMapping(g -> g.index("*")
+					.allowNoIndices(true).expandWildcards(ExpandWildcard.Open).ignoreUnavailable(true));
+
+			Map<String, IndexMappingRecord> allMappings = getMappingResponse.mappings();
+
+			for (Map.Entry<String, IndexMappingRecord> indexEntry : allMappings.entrySet()) {
+				String indexName = indexEntry.getKey();
+
+				if (!indexName.startsWith(".")) {
+					TypeMapping mappings = indexEntry.getValue().mappings();
+
+					if (mappings != null && mappings.properties() != null) {
+						indexOuterLevelProperties.put(indexName, mappings.properties().keySet());
 					}
 				}
 			}
+
 			return objectMapper.writeValueAsString(indexOuterLevelProperties);
+
 		} catch (IOException e) {
-			logger.error(e.getMessage());
+			logger.error("Error in fetchIndex: {}", e.getMessage(), e);
 		}
+
 		return null;
 	}
 
@@ -2054,51 +2139,109 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			Boolean hasMedia) {
 
 		try {
+			List<MaxVotedRecoFreq> maxVotedRecoFreqs = new ArrayList<>();
 
-			List<MaxVotedRecoFreq> maxVotedRecoFreqs = new ArrayList<MaxVotedRecoFreq>();
+			SearchResponse<Void> response = client.getClient().search(s -> {
+				var search = s.index(index).size(0);
 
-			BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery()
-					.must(QueryBuilders.termQuery("author_id", userId));
+				search = search.query(q -> q.bool(b -> {
+					b.must(m -> m.term(t -> t.field("author_id").value(userId)));
 
-			if (sGroup != null) {
-				boolQueryBuilder.must(QueryBuilders.termQuery("group_id", sGroup));
+					if (sGroup != null) {
+						b.must(m -> m.term(t -> t.field("group_id").value(sGroup)));
+					}
+
+					if (Boolean.TRUE.equals(hasMedia)) {
+						b.must(m -> m.term(t -> t.field("no_media").value(0)));
+					}
+
+					return b;
+				}));
+
+				return search.aggregations("uploadUniqueSpecies",
+						new Aggregation.Builder().terms(t -> t.field("max_voted_reco.id").size(50000)
+								.order(List.of(NamedValue.of("_count", SortOrder.Desc)))).build());
+			}, Void.class);
+
+			Aggregate aggregate = response.aggregations().get("uploadUniqueSpecies");
+
+			if (aggregate == null || aggregate.lterms() == null) {
+				return new AuthorUploadedObservationInfo(0L, maxVotedRecoFreqs);
 			}
 
-			if (hasMedia) {
-				boolQueryBuilder.must(QueryBuilders.termQuery("no_media", 0));
-			}
-
-			AggregationBuilder uploadUniqueSpecies = AggregationBuilders.terms("uploadUniqueSpecies")
-					.field("max_voted_reco.id").size(50000).order(BucketOrder.count(false));
-
-			SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-			sourceBuilder.query(boolQueryBuilder);
-			sourceBuilder.aggregation(uploadUniqueSpecies);
-
-			SearchRequest request = new SearchRequest(index);
-			request.source(sourceBuilder);
-
-			SearchResponse response = client.search(request, RequestOptions.DEFAULT);
-			Terms terms = response.getAggregations().get("uploadUniqueSpecies");
 			int count = 1;
-			for (Terms.Bucket b : terms.getBuckets()) {
-				if (count <= (size - 10))
+
+			for (LongTermsBucket b : aggregate.lterms().buckets().array()) {
+				if (count <= (size - 10)) {
 					count++;
-				else {
-					if (count > size)
+				} else {
+					if (count > size) {
 						break;
-					maxVotedRecoFreqs.add(new MaxVotedRecoFreq(Long.parseLong(b.getKeyAsString()), b.getDocCount()));
+					}
+
+					maxVotedRecoFreqs.add(new MaxVotedRecoFreq(b.key(), b.docCount()));
 					count++;
 				}
-
 			}
-			Long total = Long.parseLong(String.valueOf(terms.getBuckets().size()));
+
+			Long total = (long) aggregate.lterms().buckets().array().size();
+
 			return new AuthorUploadedObservationInfo(total, maxVotedRecoFreqs);
 
 		} catch (Exception e) {
-			logger.error(e.getMessage());
+			logger.error("Error in getUserData: {}", e.getMessage(), e);
 		}
-		return null;
 
+		return null;
 	}
+
+	@Override
+	public MapResponse autocompleteUserIBP(String index, String type, String userGroupId, String name)
+			throws IOException {
+
+		logger.info("Autocomplete user search for index: {}, type: {}, userGroupId: {}, name: {}", sanitize(index),
+				sanitize(type), sanitize(userGroupId), sanitize(name));
+
+		// Build bool query
+		BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder();
+
+		// Add must_not nested query if userGroupId is provided
+		if (userGroupId != null && !userGroupId.isEmpty()) {
+			boolQueryBuilder.mustNot(q -> q.nested(n -> n.path(USERGROUP)
+					.query(nq -> nq.term(t -> t.field("userGroup.usergroupids").value(userGroupId)))
+					.scoreMode(ChildScoreMode.None)));
+		}
+
+		// Add prefix match on user.name
+		if (name != null && !name.isEmpty()) {
+			boolQueryBuilder.must(q -> q.matchPhrasePrefix(m -> m.field("user.name").query(name)));
+		}
+
+		Query finalQuery = boolQueryBuilder.build()._toQuery();
+
+		SearchResponse<Map> searchResponse = client.getClient().search(s -> s.index(index).size(100).query(finalQuery),
+				Map.class);
+
+		List<MapDocument> result = new ArrayList<>();
+
+		for (Hit<Map> hit : searchResponse.hits().hits()) {
+			if (hit.source() != null) {
+				result.add(new MapDocument(objectMapper.writeValueAsString(hit.source())));
+			}
+		}
+
+		long totalHits = 0L;
+		if (searchResponse.hits().total() != null) {
+			totalHits = searchResponse.hits().total().value();
+		}
+
+		logger.info("Autocomplete user search completed. Total hits: {}", totalHits);
+
+		return new MapResponse(result, totalHits, null);
+	}
+
+	private String sanitize(String value) {
+		return value == null ? null : value.replaceAll("[\n\r\t]", "_");
+	}
+
 }

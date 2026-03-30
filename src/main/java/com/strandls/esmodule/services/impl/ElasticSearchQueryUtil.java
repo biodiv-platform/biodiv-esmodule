@@ -3,6 +3,7 @@ package com.strandls.esmodule.services.impl;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -10,26 +11,28 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.lucene.search.join.ScoreMode;
-import org.elasticsearch.common.geo.GeoPoint;
-import org.elasticsearch.common.geo.builders.CoordinatesBuilder;
-import org.elasticsearch.common.geo.builders.PolygonBuilder;
-import org.elasticsearch.geometry.Geometry;
-import org.elasticsearch.index.query.BoolQueryBuilder;
-import org.elasticsearch.index.query.ExistsQueryBuilder;
-import org.elasticsearch.index.query.GeoBoundingBoxQueryBuilder;
-import org.elasticsearch.index.query.GeoPolygonQueryBuilder;
-import org.elasticsearch.index.query.GeoShapeQueryBuilder;
-import org.elasticsearch.index.query.MatchPhraseQueryBuilder;
-import org.elasticsearch.index.query.QueryBuilder;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.index.query.RangeQueryBuilder;
-import org.elasticsearch.index.query.TermsQueryBuilder;
-import org.elasticsearch.search.aggregations.AggregationBuilders;
-import org.elasticsearch.search.aggregations.bucket.geogrid.GeoGridAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.GeoLocation;
+import co.elastic.clients.elasticsearch._types.GeoHashPrecision;
+import co.elastic.clients.elasticsearch._types.LatLonGeoLocation;
+import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.ExistsQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.GeoBoundingBoxQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.GeoShapeQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.MatchPhraseQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.NestedQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
+import co.elastic.clients.elasticsearch._types.query_dsl.RangeQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.TermsQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.TermsQueryField;
+import co.elastic.clients.json.JsonData;
+import co.elastic.clients.elasticsearch._types.aggregations.Aggregation;
+import co.elastic.clients.elasticsearch._types.aggregations.GeoHashGridAggregation;
+import co.elastic.clients.elasticsearch._types.aggregations.TermsAggregation;
+import co.elastic.clients.elasticsearch._types.query_dsl.GeoShapeFieldQuery;
 
 import com.strandls.esmodule.models.MapBoundParams;
 import com.strandls.esmodule.models.MapBounds;
@@ -48,43 +51,84 @@ import com.strandls.esmodule.models.query.MapQuery;
 import com.strandls.esmodule.models.query.MapRangeQuery;
 import com.strandls.esmodule.models.query.MapSearchQuery;
 
+/**
+ * Elasticsearch Query Utility for ES 9.x Migrated from High Level REST Client
+ * to Java API Client
+ */
 public class ElasticSearchQueryUtil {
 
 	private static final int SHARD_SIZE = 100;
 
 	private final Logger logger = LoggerFactory.getLogger(ElasticSearchQueryUtil.class);
 
-	private QueryBuilder getNestedQueryBuilder(MapQuery query, QueryBuilder queryBuilder) {
+	private Query getNestedQuery(MapQuery query, Query innerQuery) {
 		if (query.getPath() == null)
-			return queryBuilder;
-		return QueryBuilders.nestedQuery(query.getPath(), queryBuilder, ScoreMode.None);
+			return innerQuery;
+		return NestedQuery.of(n -> n.path(query.getPath()).query(innerQuery)
+				.scoreMode(co.elastic.clients.elasticsearch._types.query_dsl.ChildScoreMode.None))._toQuery();
 	}
 
-	private QueryBuilder getTermsQueryBuilder(MapBoolQuery query) {
-		TermsQueryBuilder queryBuilder = QueryBuilders.termsQuery(query.getKey(), query.getValues());
-		return query.getPath() != null ? getNestedQueryBuilder(query, queryBuilder) : queryBuilder;
+	private Query getTermsQuery(MapBoolQuery query) {
+		List<FieldValue> values = query.getValues().stream().map(v -> FieldValue.of(v.toString()))
+				.collect(Collectors.toList());
+
+		Query termsQuery = TermsQuery.of(t -> t.field(query.getKey()).terms(TermsQueryField.of(tf -> tf.value(values))))
+				._toQuery();
+
+		return query.getPath() != null ? getNestedQuery(query, termsQuery) : termsQuery;
 	}
 
-	private QueryBuilder getExistsQueryBuilder(MapQuery query) {
-		ExistsQueryBuilder queryBuilder = QueryBuilders.existsQuery(query.getKey());
-		return query.getPath() != null ? getNestedQueryBuilder(query, queryBuilder) : queryBuilder;
+	private Query getExistsQuery(MapQuery query) {
+		Query existsQuery = ExistsQuery.of(e -> e.field(query.getKey()))._toQuery();
+		return query.getPath() != null ? getNestedQuery(query, existsQuery) : existsQuery;
 	}
 
-	private QueryBuilder getRangeQueryBuilder(MapRangeQuery query) {
-		RangeQueryBuilder queryBuilder = QueryBuilders.rangeQuery(query.getKey()).gte(query.getStart())
-				.lte(query.getEnd());
-		return query.getPath() != null ? getNestedQueryBuilder(query, queryBuilder) : queryBuilder;
+	private Query getRangeQuery(MapRangeQuery query) {
+		if (query.getStart() == null && query.getEnd() == null) {
+			return null;
+		}
+
+		RangeQuery.Builder builder = new RangeQuery.Builder();
+
+		// Try to determine if it's a number or date
+		try {
+			// Attempt as number range
+			Double startValue = query.getStart() != null ? Double.parseDouble(query.getStart().toString()) : null;
+			Double endValue = query.getEnd() != null ? Double.parseDouble(query.getEnd().toString()) : null;
+
+			builder.number(n -> {
+				n.field(query.getKey());
+				if (startValue != null)
+					n.gte(startValue);
+				if (endValue != null)
+					n.lte(endValue);
+				return n;
+			});
+		} catch (NumberFormatException e) {
+			// If not a number, treat as date range
+			builder.date(d -> {
+				d.field(query.getKey());
+				if (query.getStart() != null)
+					d.gte(query.getStart().toString());
+				if (query.getEnd() != null)
+					d.lte(query.getEnd().toString());
+				return d;
+			});
+		}
+
+		Query rangeQuery = builder.build()._toQuery();
+		return query.getPath() != null ? getNestedQuery(query, rangeQuery) : rangeQuery;
 	}
 
-	private QueryBuilder getMatchPhraseQueryBuilder(MapMatchPhraseQuery query) {
-		MatchPhraseQueryBuilder queryBuilder = QueryBuilders.matchPhraseQuery(query.getKey(), query.getValue());
-		return query.getPath() != null ? getNestedQueryBuilder(query, queryBuilder) : queryBuilder;
+	private Query getMatchPhraseQuery(MapMatchPhraseQuery query) {
+		Query matchQuery = MatchPhraseQuery.of(m -> m.field(query.getKey()).query(query.getValue().toString()))
+				._toQuery();
+
+		return query.getPath() != null ? getNestedQuery(query, matchQuery) : matchQuery;
 	}
 
 	private void buildBoolQueries(List<MapAndBoolQuery> andQueries, List<MapOrBoolQuery> orQueries,
-			BoolQueryBuilder masterBoolQuery) {
-
-		BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+			BoolQuery.Builder masterBoolQuery) {
 
 		List<MapAndBoolQuery> nonNestedAnd = andQueries.stream()
 				.filter(p -> (p.getPath() == null || p.getPath().isEmpty())).collect(Collectors.toList());
@@ -94,15 +138,15 @@ public class ElasticSearchQueryUtil {
 
 		buildNestedBoolAndQuery(nestedAnd, masterBoolQuery);
 
-		if (andQueries != null) {
-			boolQuery = QueryBuilders.boolQuery();
+		if (andQueries != null && !nonNestedAnd.isEmpty()) {
+			BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 			for (MapBoolQuery query : nonNestedAnd) {
 				if (query.getValues() != null)
-					boolQuery.must(getTermsQueryBuilder(query));
+					boolQuery.must(getTermsQuery(query));
 				else
-					boolQuery.mustNot(getExistsQueryBuilder(query));
+					boolQuery.mustNot(getExistsQuery(query));
 			}
-			masterBoolQuery.must(boolQuery);
+			masterBoolQuery.must(boolQuery.build()._toQuery());
 		}
 
 		List<MapOrBoolQuery> nonNestedOrList = orQueries.stream()
@@ -113,91 +157,87 @@ public class ElasticSearchQueryUtil {
 
 		buildNestedBoolOrQuery(nestedOrList, masterBoolQuery);
 
-		if (orQueries != null) {
-			boolQuery = QueryBuilders.boolQuery();
+		if (orQueries != null && !nonNestedOrList.isEmpty()) {
+			BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 			for (MapBoolQuery query : nonNestedOrList) {
 				if (query.getValues() != null)
-					boolQuery.should(getTermsQueryBuilder(query));
+					boolQuery.should(getTermsQuery(query));
 				else
-					boolQuery.mustNot(getExistsQueryBuilder(query));
+					boolQuery.mustNot(getExistsQuery(query));
 			}
-			masterBoolQuery.must(boolQuery);
+			masterBoolQuery.must(boolQuery.build()._toQuery());
 		}
 	}
 
-	private void combinationNestedQuery(BoolQueryBuilder masterBoolQery, BoolQueryBuilder nestedBoolQuery,
+	private void combinationNestedQuery(BoolQuery.Builder masterBoolQuery, BoolQuery.Builder nestedBoolQuery,
 			String nestedPath) {
 		String regex = "(.)*(\\d)(.)*";
-		Pattern pattern = Pattern.compile(regex);// NOSONAR
+		Pattern pattern = Pattern.compile(regex);
 		if (StringUtils.isNumeric(nestedPath)) {
-			masterBoolQery.must(nestedBoolQuery);
+			masterBoolQuery.must(nestedBoolQuery.build()._toQuery());
 		} else {
-			// case nested combination query convert "fieldData.108"->"fieldData"
 			if (pattern.matcher(nestedPath).matches()) {
 				List<String> list = Arrays.asList(nestedPath.split("\\.")).subList(0,
 						(nestedPath.split("\\.").length - 1));
 				nestedPath = String.join(".", list);
 			}
-			masterBoolQery.must(QueryBuilders.nestedQuery(nestedPath, nestedBoolQuery, ScoreMode.None));
+			final String path = nestedPath;
+			masterBoolQuery.must(NestedQuery
+					.of(n -> n.path(path).query(nestedBoolQuery.build()._toQuery())
+							.scoreMode(co.elastic.clients.elasticsearch._types.query_dsl.ChildScoreMode.None))
+					._toQuery());
 		}
 	}
 
-	private void buildNestedBoolAndQuery(List<MapAndBoolQuery> nestedAnd, BoolQueryBuilder masterBoolQery) {
+	private void buildNestedBoolAndQuery(List<MapAndBoolQuery> nestedAnd, BoolQuery.Builder masterBoolQuery) {
 
 		Map<String, List<MapAndBoolQuery>> nestedGroupAndByList = nestedAnd.stream()
 				.collect(Collectors.groupingBy(w -> w.getPath()));
 
 		for (Entry<String, List<MapAndBoolQuery>> item : nestedGroupAndByList.entrySet()) {
-			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
-
-			// for combination and nested combination queies
+			BoolQuery.Builder nestedBoolQuery = new BoolQuery.Builder();
 			String nestedPath = item.getKey();
 
 			item.getValue().forEach(qry -> {
 				qry.setPath(null);
 				if (qry.getValues() != null)
-					nestedBoolQuery.must(getTermsQueryBuilder(qry));
+					nestedBoolQuery.must(getTermsQuery(qry));
 				else
-					nestedBoolQuery.mustNot(getExistsQueryBuilder(qry));
+					nestedBoolQuery.mustNot(getExistsQuery(qry));
 			});
 
-			combinationNestedQuery(masterBoolQery, nestedBoolQuery, nestedPath);
-
+			combinationNestedQuery(masterBoolQuery, nestedBoolQuery, nestedPath);
 		}
 	}
 
-	private void buildNestedBoolOrQuery(List<MapOrBoolQuery> nestedOr, BoolQueryBuilder masterBoolQery) {
+	private void buildNestedBoolOrQuery(List<MapOrBoolQuery> nestedOr, BoolQuery.Builder masterBoolQuery) {
 
 		Map<String, List<MapOrBoolQuery>> nestedGroupAndByList = nestedOr.stream()
 				.collect(Collectors.groupingBy(w -> w.getPath()));
 
 		for (Entry<String, List<MapOrBoolQuery>> item : nestedGroupAndByList.entrySet()) {
-			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
-
-			// for combination and nested combination queies
+			BoolQuery.Builder nestedBoolQuery = new BoolQuery.Builder();
 			String nestedPath = item.getKey();
 
 			item.getValue().forEach(qry -> {
 				qry.setPath(null);
 				if (qry.getValues() != null)
-					nestedBoolQuery.should(getTermsQueryBuilder(qry));
+					nestedBoolQuery.should(getTermsQuery(qry));
 				else
-					nestedBoolQuery.mustNot(getExistsQueryBuilder(qry));
+					nestedBoolQuery.mustNot(getExistsQuery(qry));
 			});
 
-			combinationNestedQuery(masterBoolQery, nestedBoolQuery, nestedPath);
+			combinationNestedQuery(masterBoolQuery, nestedBoolQuery, nestedPath);
 		}
 	}
 
-	private void buildNestedRangeAndQuery(List<MapAndRangeQuery> nestedRangeand, BoolQueryBuilder masterBoolQery) {
+	private void buildNestedRangeAndQuery(List<MapAndRangeQuery> nestedRangeand, BoolQuery.Builder masterBoolQuery) {
 
 		Map<String, List<MapAndRangeQuery>> nestedGroupAndByList = nestedRangeand.stream()
 				.collect(Collectors.groupingBy(w -> w.getPath()));
 
 		for (Entry<String, List<MapAndRangeQuery>> item : nestedGroupAndByList.entrySet()) {
-			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
-
-			// for combination and nested combination queies
+			BoolQuery.Builder nestedBoolQuery = new BoolQuery.Builder();
 			String nestedPath = item.getKey();
 
 			item.getValue().forEach(qry -> {
@@ -208,27 +248,23 @@ public class ElasticSearchQueryUtil {
 					list.add(qry.getStart());
 					boolqry.setKey(qry.getKey());
 					boolqry.setValues(list);
-					nestedBoolQuery.must(getTermsQueryBuilder(boolqry));
-
+					nestedBoolQuery.must(getTermsQuery(boolqry));
 				} else {
-					nestedBoolQuery.must(getRangeQueryBuilder(qry));
+					nestedBoolQuery.must(getRangeQuery(qry));
 				}
-
 			});
 
-			combinationNestedQuery(masterBoolQery, nestedBoolQuery, nestedPath);
+			combinationNestedQuery(masterBoolQuery, nestedBoolQuery, nestedPath);
 		}
 	}
 
-	private void buildNestedRangeOrQuery(List<MapOrRangeQuery> nestedRangeOr, BoolQueryBuilder masterBoolQery) {
+	private void buildNestedRangeOrQuery(List<MapOrRangeQuery> nestedRangeOr, BoolQuery.Builder masterBoolQuery) {
 
 		Map<String, List<MapOrRangeQuery>> nestedGroupOrByList = nestedRangeOr.stream()
 				.collect(Collectors.groupingBy(w -> w.getPath()));
 
 		for (Entry<String, List<MapOrRangeQuery>> item : nestedGroupOrByList.entrySet()) {
-			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
-
-			// for combination and nested combination queies
+			BoolQuery.Builder nestedBoolQuery = new BoolQuery.Builder();
 			String nestedPath = item.getKey();
 
 			item.getValue().forEach(qry -> {
@@ -239,78 +275,64 @@ public class ElasticSearchQueryUtil {
 					list.add(qry.getStart());
 					boolqry.setKey(qry.getKey());
 					boolqry.setValues(list);
-					nestedBoolQuery.should(getTermsQueryBuilder(boolqry));
-
+					nestedBoolQuery.should(getTermsQuery(boolqry));
 				} else {
-					nestedBoolQuery.should(getRangeQueryBuilder(qry));
+					nestedBoolQuery.should(getRangeQuery(qry));
 				}
-
 			});
 
-			combinationNestedQuery(masterBoolQery, nestedBoolQuery, nestedPath);
+			combinationNestedQuery(masterBoolQuery, nestedBoolQuery, nestedPath);
 		}
 	}
 
-	// builds nested, combination , nested combination queries based on the path
-	// type
-	// eg. path = "108"[combination query],
-	// eg. path = "fieldData"[nested],
-	// eg. path = "fieldData.108"[nested combination]
 	private void buildNestedMatchPhraseAndQuery(List<MapAndMatchPhraseQuery> nestedAnd,
-			BoolQueryBuilder masterBoolQery) {
+			BoolQuery.Builder masterBoolQuery) {
 
-		// group by path parameter in nestedAdd query
 		Map<String, List<MapAndMatchPhraseQuery>> nestedGroupAndByList = nestedAnd.stream()
 				.collect(Collectors.groupingBy(w -> w.getPath()));
 
-		// for each path create a combination or nested or nested-combination query
 		for (Entry<String, List<MapAndMatchPhraseQuery>> item : nestedGroupAndByList.entrySet()) {
-			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
-			// for combination and nested combination queies
+			BoolQuery.Builder nestedBoolQuery = new BoolQuery.Builder();
 			String nestedPath = item.getKey();
 
 			item.getValue().forEach(qry -> {
 				qry.setPath(null);
 				if (qry.getValue() != null)
-					nestedBoolQuery.must(getMatchPhraseQueryBuilder(qry));
+					nestedBoolQuery.must(getMatchPhraseQuery(qry));
 				else
-					nestedBoolQuery.mustNot(getExistsQueryBuilder(qry));
+					nestedBoolQuery.mustNot(getExistsQuery(qry));
 			});
 
-			combinationNestedQuery(masterBoolQery, nestedBoolQuery, nestedPath);
+			combinationNestedQuery(masterBoolQuery, nestedBoolQuery, nestedPath);
 		}
 	}
 
-	private void buildNestedMatchPhraseOrQuery(List<MapOrMatchPhraseQuery> nestedor, BoolQueryBuilder masterBoolQery) {
+	private void buildNestedMatchPhraseOrQuery(List<MapOrMatchPhraseQuery> nestedor,
+			BoolQuery.Builder masterBoolQuery) {
 
 		Map<String, List<MapOrMatchPhraseQuery>> nestedGroupAndByList = nestedor.stream()
 				.collect(Collectors.groupingBy(w -> w.getPath()));
 
 		for (Entry<String, List<MapOrMatchPhraseQuery>> item : nestedGroupAndByList.entrySet()) {
-			BoolQueryBuilder nestedBoolQuery = QueryBuilders.boolQuery();
-
-			// for combination and nested combination queies
+			BoolQuery.Builder nestedBoolQuery = new BoolQuery.Builder();
 			String nestedPath = item.getKey();
 
 			item.getValue().forEach(qry -> {
 				qry.setPath(null);
 				if (qry.getValue() != null)
-					nestedBoolQuery.should(getMatchPhraseQueryBuilder(qry));
+					nestedBoolQuery.should(getMatchPhraseQuery(qry));
 				else
-					nestedBoolQuery.mustNot(getExistsQueryBuilder(qry));
+					nestedBoolQuery.mustNot(getExistsQuery(qry));
 			});
 
-			combinationNestedQuery(masterBoolQery, nestedBoolQuery, nestedPath);
+			combinationNestedQuery(masterBoolQuery, nestedBoolQuery, nestedPath);
 		}
 	}
 
 	private void buildRangeQueries(List<MapAndRangeQuery> andQueries, List<MapOrRangeQuery> orQueries,
-			BoolQueryBuilder masterBoolQuery) {
-
-		BoolQueryBuilder boolQuery;
+			BoolQuery.Builder masterBoolQuery) {
 
 		if (andQueries != null) {
-
 			List<MapAndRangeQuery> nonNestedOrList = andQueries.stream()
 					.filter(p -> (p.getPath() == null || p.getPath().isEmpty())).collect(Collectors.toList());
 
@@ -319,16 +341,16 @@ public class ElasticSearchQueryUtil {
 
 			buildNestedRangeAndQuery(nestedOrList, masterBoolQuery);
 
-			boolQuery = QueryBuilders.boolQuery();
+			BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 			for (MapAndRangeQuery query : nonNestedOrList) {
 				if (query.getStart() != null && query.getEnd() != null)
-					boolQuery.must(getRangeQueryBuilder(query));
+					boolQuery.must(getRangeQuery(query));
 			}
-			masterBoolQuery.must(boolQuery);
+			if (!nonNestedOrList.isEmpty())
+				masterBoolQuery.must(boolQuery.build()._toQuery());
 		}
 
 		if (orQueries != null) {
-
 			List<MapOrRangeQuery> nonNestedOrList = orQueries.stream()
 					.filter(p -> (p.getPath() == null || p.getPath().isEmpty())).collect(Collectors.toList());
 
@@ -337,36 +359,34 @@ public class ElasticSearchQueryUtil {
 
 			buildNestedRangeOrQuery(nestedOrList, masterBoolQuery);
 
-			boolQuery = QueryBuilders.boolQuery();
+			BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 			for (MapOrRangeQuery query : nonNestedOrList) {
 				if (query.getStart() != null && query.getEnd() != null)
-					boolQuery.should(getRangeQueryBuilder(query));
+					boolQuery.should(getRangeQuery(query));
 			}
-			masterBoolQuery.must(boolQuery);
-
+			if (!nonNestedOrList.isEmpty())
+				masterBoolQuery.must(boolQuery.build()._toQuery());
 		}
 	}
 
-	private void buildExistsQueries(List<MapExistQuery> andExistQueries, BoolQueryBuilder masterBoolQuery) {
+	private void buildExistsQueries(List<MapExistQuery> andExistQueries, BoolQuery.Builder masterBoolQuery) {
 
 		if (andExistQueries != null) {
-			BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+			BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 			for (MapExistQuery query : andExistQueries) {
 				if (query.isExists())
-					boolQuery.must(getExistsQueryBuilder(query));
+					boolQuery.must(getExistsQuery(query));
 				else
-					boolQuery.mustNot(getExistsQueryBuilder(query));
+					boolQuery.mustNot(getExistsQuery(query));
 			}
-			masterBoolQuery.must(boolQuery);
+			masterBoolQuery.must(boolQuery.build()._toQuery());
 		}
 	}
 
 	private void buildMatchPhraseQueries(List<MapAndMatchPhraseQuery> andQueries, List<MapOrMatchPhraseQuery> orQueries,
-			BoolQueryBuilder masterBoolQuery) {
-		BoolQueryBuilder boolQuery;
+			BoolQuery.Builder masterBoolQuery) {
 
 		if (andQueries != null) {
-
 			List<MapAndMatchPhraseQuery> nonNestedOrList = andQueries.stream()
 					.filter(p -> (p.getPath() == null || p.getPath().isEmpty())).collect(Collectors.toList());
 
@@ -375,18 +395,18 @@ public class ElasticSearchQueryUtil {
 
 			buildNestedMatchPhraseAndQuery(nestedOrList, masterBoolQuery);
 
-			boolQuery = QueryBuilders.boolQuery();
+			BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 			for (MapAndMatchPhraseQuery query : nonNestedOrList) {
 				if (query.getValue() != null)
-					boolQuery.must(getMatchPhraseQueryBuilder(query));
+					boolQuery.must(getMatchPhraseQuery(query));
 				else
-					boolQuery.mustNot(getExistsQueryBuilder(query));
+					boolQuery.mustNot(getExistsQuery(query));
 			}
-			masterBoolQuery.must(boolQuery);
+			if (!nonNestedOrList.isEmpty())
+				masterBoolQuery.must(boolQuery.build()._toQuery());
 		}
 
 		if (orQueries != null) {
-
 			List<MapOrMatchPhraseQuery> nonNestedOrList = orQueries.stream()
 					.filter(p -> (p.getPath() == null || p.getPath().isEmpty())).collect(Collectors.toList());
 
@@ -395,68 +415,65 @@ public class ElasticSearchQueryUtil {
 
 			buildNestedMatchPhraseOrQuery(nestedOrList, masterBoolQuery);
 
-			boolQuery = QueryBuilders.boolQuery();
+			BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 			for (MapOrMatchPhraseQuery query : nonNestedOrList) {
 				if (query.getValue() != null)
-					boolQuery.should(getMatchPhraseQueryBuilder(query));
+					boolQuery.should(getMatchPhraseQuery(query));
 				else
-					boolQuery.mustNot(getExistsQueryBuilder(query));
+					boolQuery.mustNot(getExistsQuery(query));
 			}
-			masterBoolQuery.must(boolQuery);
+			if (!nonNestedOrList.isEmpty())
+				masterBoolQuery.must(boolQuery.build()._toQuery());
 		}
-
 	}
 
-	protected BoolQueryBuilder getBoolQueryBuilder(MapSearchQuery searchQuery) {
+	protected Query getBoolQuery(MapSearchQuery searchQuery) {
 
-		BoolQueryBuilder masterBoolQuery = QueryBuilders.boolQuery();
+		BoolQuery.Builder masterBoolQuery = new BoolQuery.Builder();
 
 		if (searchQuery == null)
-			return masterBoolQuery;
+			return masterBoolQuery.build()._toQuery();
 
 		buildBoolQueries(searchQuery.getAndBoolQueries(), searchQuery.getOrBoolQueries(), masterBoolQuery);
 		buildRangeQueries(searchQuery.getAndRangeQueries(), searchQuery.getOrRangeQueries(), masterBoolQuery);
 		buildExistsQueries(searchQuery.getAndExistQueries(), masterBoolQuery);
 		buildMatchPhraseQueries(searchQuery.getAndMatchPhraseQueries(), searchQuery.getOrMatchPhraseQueries(),
 				masterBoolQuery);
-		return masterBoolQuery;
+		return masterBoolQuery.build()._toQuery();
 	}
 
-	public MatchPhraseQueryBuilder getBoolQueryBuilderObservationPan(String id, Boolean isMaxVotedRecoId) {
+	public Query getBoolQueryBuilderObservationPan(String id, Boolean isMaxVotedRecoId) {
 
-		MatchPhraseQueryBuilder masterBoolQueryBuilder = null;
 		if (isMaxVotedRecoId)
-			masterBoolQueryBuilder = QueryBuilders.matchPhraseQuery("max_voted_reco.id", id);
+			return MatchPhraseQuery.of(m -> m.field("max_voted_reco.id").query(id))._toQuery();
 		else
-			// taxonomyId
-			masterBoolQueryBuilder = QueryBuilders.matchPhraseQuery("max_voted_reco.hierarchy.taxon_id", id);
-		return masterBoolQueryBuilder;
+			return MatchPhraseQuery.of(m -> m.field("max_voted_reco.hierarchy.taxon_id").query(id))._toQuery();
 	}
 
-	protected GeoGridAggregationBuilder getGeoGridAggregationBuilder(String field, Integer precision) {
+	protected Aggregation getGeoGridAggregation(String field, Integer precision) {
 		if (field == null)
 			return null;
 
-		precision = precision != null ? precision : 1;
-		GeoGridAggregationBuilder geohashGrid = AggregationBuilders.geohashGrid(field + "-" + precision);
-		geohashGrid.field(field);
-		geohashGrid.precision(precision);
-		return geohashGrid;
+		final int precisionValue = precision != null ? precision : 1;
+
+		GeoHashPrecision geoHashPrecision = GeoHashPrecision.of(g -> g.geohashLength(precisionValue));
+
+		return GeoHashGridAggregation.of(g -> g.field(field).precision(geoHashPrecision))._toAggregation();
 	}
 
-	protected TermsAggregationBuilder getTermsAggregationBuilder(String field, String subField, Integer size) {
-		TermsAggregationBuilder builder = AggregationBuilders.terms(field);
-		builder.field(field);
+	protected Aggregation getTermsAggregation(String field, String subField, Integer size) {
+		TermsAggregation.Builder termsBuilder = new TermsAggregation.Builder().field(field).size(size)
+				.shardSize(SHARD_SIZE);
 
-		if (subField != null)
-			builder.subAggregation(AggregationBuilders.terms(subField).field(subField));
-
-		builder.size(size);
-		builder.shardSize(SHARD_SIZE);
-		return builder;
+		if (subField != null && !subField.isEmpty()) {
+			return Aggregation.of(a -> a.terms(termsBuilder.build())
+					.aggregations(Map.of(subField, Aggregation.of(sub -> sub.terms(t -> t.field(subField))))));
+		} else {
+			return Aggregation.of(a -> a.terms(termsBuilder.build()));
+		}
 	}
 
-	protected void applyMapBounds(MapSearchParams searchParams, BoolQueryBuilder masterBoolQuery,
+	protected void applyMapBounds(MapSearchParams searchParams, BoolQuery.Builder masterBoolQuery,
 			String geoAggregationField) {
 
 		MapBoundParams mapBoundParams = searchParams.getMapBoundParams();
@@ -470,16 +487,46 @@ public class ElasticSearchQueryUtil {
 
 		List<MapGeoPoint> polygon = mapBoundParams.getPolygon();
 		if (polygon != null && !polygon.isEmpty() && geoAggregationField != null) {
-			List<GeoPoint> geoPoints = new ArrayList<>();
-			for (MapGeoPoint point : polygon)
-				geoPoints.add(new GeoPoint(point.getLat(), point.getLon()));
-
-			GeoPolygonQueryBuilder setPolygon = QueryBuilders.geoPolygonQuery(geoAggregationField, geoPoints);
-			masterBoolQuery.filter(setPolygon);
+			// GeoPolygonQuery is deprecated - use GeoShape with polygon instead
+			logger.warn("GeoPolygon query converted to GeoShape query for ES 9 compatibility");
+			try {
+				applyGeoShapePolygonQuery(polygon, masterBoolQuery, geoAggregationField);
+			} catch (IOException e) {
+				logger.error("Error applying geo shape polygon query", e);
+			}
 		}
 	}
 
-	protected void applyShapeFilter(MapSearchParams searchParams, BoolQueryBuilder masterBoolQuery,
+	private void applyGeoShapePolygonQuery(List<MapGeoPoint> polygon, BoolQuery.Builder masterBoolQuery, String field)
+			throws IOException {
+
+		List<List<Double>> coordinates = new ArrayList<>();
+		for (MapGeoPoint point : polygon) {
+			coordinates.add(Arrays.asList(point.getLon(), point.getLat()));
+		}
+
+		// Close polygon
+		if (!polygon.isEmpty()) {
+			MapGeoPoint first = polygon.get(0);
+			coordinates.add(Arrays.asList(first.getLon(), first.getLat()));
+		}
+
+		List<List<List<Double>>> wrappedCoordinates = new ArrayList<>();
+		wrappedCoordinates.add(coordinates);
+
+		// ✅ Build GeoJSON
+		Map<String, Object> geoJson = new HashMap<>();
+		geoJson.put("type", "Polygon");
+		geoJson.put("coordinates", wrappedCoordinates);
+
+		// ✅ Wrap into GeoShapeFieldQuery
+		GeoShapeFieldQuery fieldQuery = GeoShapeFieldQuery.of(f -> f.shape(JsonData.of(geoJson)));
+
+		masterBoolQuery.filter(GeoShapeQuery.of(g -> g.field(field).shape(fieldQuery) // ✅ correct type
+		)._toQuery());
+	}
+
+	protected void applyShapeFilter(MapSearchParams searchParams, BoolQuery.Builder masterBoolQuery,
 			String geoShapeFilterField) throws IOException {
 
 		MapBoundParams mapBoundParams = searchParams.getMapBoundParams();
@@ -496,39 +543,62 @@ public class ElasticSearchQueryUtil {
 		}
 	}
 
-	protected void applyGeoPolygonQuery(List<MapGeoPoint> polygon, BoolQueryBuilder masterBoolQuery,
+	protected void applyGeoPolygonQuery(List<MapGeoPoint> polygon, BoolQuery.Builder masterBoolQuery,
 			String geoShapeFilterField) throws IOException {
-		CoordinatesBuilder cb = new CoordinatesBuilder();
 
-		polygon.forEach(i -> {
-			cb.coordinate(i.getLon(), i.getLat());
-		});
-		Geometry polygonSet = new PolygonBuilder(cb).buildGeometry();
-		GeoShapeQueryBuilder qb = QueryBuilders.geoShapeQuery(geoShapeFilterField, polygonSet);
-		masterBoolQuery.minimumShouldMatch(1);
-		masterBoolQuery.should(qb);
+		// Convert to coordinate list
+		List<List<Double>> coordinates = new ArrayList<>();
+		for (MapGeoPoint point : polygon) {
+			coordinates.add(Arrays.asList(point.getLon(), point.getLat()));
+		}
 
+		// Close polygon
+		if (!polygon.isEmpty()) {
+			MapGeoPoint first = polygon.get(0);
+			coordinates.add(Arrays.asList(first.getLon(), first.getLat()));
+		}
+
+		// Wrap coordinates
+		List<List<List<Double>>> wrappedCoordinates = new ArrayList<>();
+		wrappedCoordinates.add(coordinates);
+
+		// Build GeoJSON
+		Map<String, Object> geoJson = new HashMap<>();
+		geoJson.put("type", "Polygon");
+		geoJson.put("coordinates", wrappedCoordinates);
+
+		// Wrap into GeoShapeFieldQuery
+		GeoShapeFieldQuery shapeQuery = GeoShapeFieldQuery.of(f -> f.shape(JsonData.of(geoJson)));
+
+		masterBoolQuery.minimumShouldMatch("1");
+
+		masterBoolQuery.should(GeoShapeQuery.of(g -> g.field(geoShapeFilterField).shape(shapeQuery))._toQuery());
 	}
 
-	protected void applyMultiPolygonQuery(List<List<MapGeoPoint>> multipolygon, BoolQueryBuilder masterBoolQuery,
+	protected void applyMultiPolygonQuery(List<List<MapGeoPoint>> multipolygon, BoolQuery.Builder masterBoolQuery,
 			String geoShapeFilterField) throws IOException {
 
 		multipolygon.forEach(item -> {
 			try {
 				applyGeoPolygonQuery(item, masterBoolQuery, geoShapeFilterField);
-
 			} catch (IOException e) {
 				logger.error(e.getMessage());
 			}
 		});
 	}
 
-	protected void applyMapBounds(MapBounds bounds, BoolQueryBuilder masterBoolQuery, String geoAggregationField) {
+	// FIXED: Corrected GeoBoundingBoxQuery with GeoLocation wrapper
+	protected void applyMapBounds(MapBounds bounds, BoolQuery.Builder masterBoolQuery, String geoAggregationField) {
 
 		if (bounds != null) {
-			GeoBoundingBoxQueryBuilder setCorners = QueryBuilders.geoBoundingBoxQuery(geoAggregationField)
-					.setCorners(bounds.getTop(), bounds.getLeft(), bounds.getBottom(), bounds.getRight());
-			masterBoolQuery.filter(setCorners);
+			masterBoolQuery
+					.filter(GeoBoundingBoxQuery
+							.of(g -> g.field(geoAggregationField).boundingBox(b -> b.tlbr(tlbr -> tlbr
+									.topLeft(GeoLocation.of(gl -> gl.latlon(
+											LatLonGeoLocation.of(ll -> ll.lat(bounds.getTop()).lon(bounds.getLeft())))))
+									.bottomRight(GeoLocation.of(gl -> gl.latlon(LatLonGeoLocation
+											.of(ll -> ll.lat(bounds.getBottom()).lon(bounds.getRight()))))))))
+							._toQuery());
 		}
 	}
 

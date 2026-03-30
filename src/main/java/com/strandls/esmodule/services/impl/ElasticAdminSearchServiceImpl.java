@@ -8,7 +8,6 @@ import org.apache.http.util.EntityUtils;
 import org.elasticsearch.client.Request;
 import org.elasticsearch.client.Response;
 import org.elasticsearch.client.RestClient;
-import org.elasticsearch.common.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,7 +49,7 @@ public class ElasticAdminSearchServiceImpl implements ElasticAdminSearchService 
 		logger.info("Trying to add mapping to index: {}", indexParam);
 
 		StringEntity entity = null;
-		if (!Strings.isNullOrEmpty(mapping)) {
+		if (mapping != null && !mapping.isEmpty()) {
 			entity = new StringEntity(mapping, ContentType.APPLICATION_JSON);
 		}
 
@@ -111,7 +110,7 @@ public class ElasticAdminSearchServiceImpl implements ElasticAdminSearchService 
 		logger.info("Trying to add mapping to index: {}", index);
 
 		StringEntity entity = null;
-		if (!Strings.isNullOrEmpty(mapping)) {
+		if (mapping != null && !mapping.isEmpty()) {
 			entity = new StringEntity(mapping, ContentType.APPLICATION_JSON);
 		}
 		Request request = new Request("PUT", index + "/");
