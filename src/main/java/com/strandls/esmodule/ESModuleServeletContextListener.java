@@ -44,6 +44,8 @@ public class ESModuleServeletContextListener extends GuiceServletContextListener
 				bind(ElasticSearchClient.class).toInstance(esClient);
 
 				ObjectMapper objectMapper = new ObjectMapper();
+				// Configure to include null values during serialization
+				objectMapper.setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.ALWAYS);
 				bind(ObjectMapper.class).toInstance(objectMapper);
 
 				bind(UtilityMethods.class).in(Scopes.SINGLETON);

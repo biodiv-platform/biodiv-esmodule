@@ -78,6 +78,9 @@ public class ESController {
 	@Inject
 	public UtilityMethods utilityMethods;
 
+	@Inject
+	public ObjectMapper objectMapper;
+
 	@GET
 	@Path(ApiConstants.PING)
 	@Produces(MediaType.TEXT_PLAIN)
@@ -213,8 +216,8 @@ public class ESController {
 			@Parameter(name = "documents") List<Map<String, Object>> documents) {
 		try {
 			// Convert List<Map> to JSON string for the service layer
-			ObjectMapper mapper = new ObjectMapper();
-			String jsonArray = mapper.writeValueAsString(documents);
+			// Use injected ObjectMapper configured to preserve null values
+			String jsonArray = objectMapper.writeValueAsString(documents);
 			return elasticSearchService.bulkUpload(index, type, jsonArray);
 		} catch (IOException e) {
 			throw new WebApplicationException(
