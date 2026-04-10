@@ -9,5 +9,8 @@
 	"dateLibrary": "legacy",
 	"library": "jersey3",
 	"developerName": "Abhishek Kumar Rudra",
-	"developerEmail": "abhishek.rudra@strandls.com"
+	"developerEmail": "abhishek.rudra@strandls.com",
+	"additionalProperties": {
+		"serializationInclusion": "ALWAYS"
+	}
 }
