@@ -224,6 +224,24 @@ public class ESController {
 					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
 		}
 	}
+	
+	@POST
+	@Path(ApiConstants.BULK_UPLOAD_OBSERVATIONS + "/{index}/{type}")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Bulk Upload Create Document", description = "Returns Success Failure")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(array = @ArraySchema(schema = @Schema(implementation = MapQueryResponse.class)))),
+			@ApiResponse(responseCode = "500", description = "ERROR") })
+	public List<MapQueryResponse> bulkUploadObservations(@PathParam("index") String index, @PathParam("type") String type,
+			@Parameter(name = "documents") String documents) {
+		try {
+			return elasticSearchService.bulkUpload(index, type, documents);
+		} catch (IOException e) {
+			throw new WebApplicationException(
+					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
+		}
+	}
 
 	@PUT
 	@Path(ApiConstants.BULK_UPDATE + "/{index}/{type}")

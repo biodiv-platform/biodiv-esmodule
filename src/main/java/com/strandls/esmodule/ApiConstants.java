@@ -20,6 +20,7 @@ public class ApiConstants {
 	public static final String SERVICES = "/services";
 	public static final String DATA = "/data";
 	public static final String BULK_UPLOAD = "/bulk-upload";
+	public static final String BULK_UPLOAD_OBSERVATIONS = "/bulk-upload-observations";
 	public static final String BULK_UPDATE = "/bulk-update";
 	public static final String TERM_SEARCH = "/term-search";
 	public static final String RANGE_SEARCH = "/range-search";
