@@ -304,9 +304,24 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		logger.info("DEBUG parseJson: Input starts with: {}",
 			jsonArray != null && jsonArray.length() > 100 ? jsonArray.substring(0, 100) : jsonArray);
 
+		// Handle case where JAX-RS double-serializes the string parameter
+		// If the string is wrapped in quotes (JSON-encoded), unwrap it first
+		String actualJsonArray = jsonArray;
+		if (jsonArray != null && jsonArray.startsWith("\"") && jsonArray.endsWith("\"")) {
+			logger.info("DEBUG parseJson: Detected JSON-encoded string, unwrapping...");
+			try {
+				// Parse as a JSON string to unwrap and unescape
+				actualJsonArray = mapper.readValue(jsonArray, String.class);
+				logger.info("DEBUG parseJson: After unwrapping, starts with: {}",
+					actualJsonArray.length() > 100 ? actualJsonArray.substring(0, 100) : actualJsonArray);
+			} catch (Exception e) {
+				logger.warn("DEBUG parseJson: Failed to unwrap string, using original: {}", e.getMessage());
+			}
+		}
+
 		JsonNode[] jsons = null;
 		try {
-			jsons = mapper.readValue(jsonArray, JsonNode[].class);
+			jsons = mapper.readValue(actualJsonArray, JsonNode[].class);
 		} catch (JsonParseException e) {
 			String detailedError = "Json Parsing Exception: " + e.getMessage();
 			logger.error("JSON Parsing Exception during bulk upload parsing:", e);
