@@ -236,8 +236,17 @@ public class ESController {
 	public List<MapQueryResponse> bulkUploadObservations(@PathParam("index") String index, @PathParam("type") String type,
 			@Parameter(name = "documents") String documents) {
 		try {
-			return elasticSearchService.bulkUpload(index, type, documents);
+			System.out.println("DEBUG ESController.bulkUploadObservations: Received " + documents.length() + " chars");
+			System.out.println("DEBUG ESController.bulkUploadObservations: First 500 chars: " +
+				(documents.length() > 500 ? documents.substring(0, 500) + "..." : documents));
+
+			List<MapQueryResponse> response = elasticSearchService.bulkUpload(index, type, documents);
+
+			System.out.println("DEBUG ESController.bulkUploadObservations: Response: " + response);
+			return response;
 		} catch (IOException e) {
+			System.out.println("ERROR ESController.bulkUploadObservations: " + e.getMessage());
+			e.printStackTrace();
 			throw new WebApplicationException(
 					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
 		}
