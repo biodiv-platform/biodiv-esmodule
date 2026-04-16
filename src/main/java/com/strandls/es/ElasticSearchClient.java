@@ -1,13 +1,11 @@
-
 package com.strandls.es;
-
-import org.elasticsearch.client.RestClient;
-import org.elasticsearch.client.RestClientBuilder;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.json.jackson.JacksonJsonpMapper;
 import co.elastic.clients.transport.ElasticsearchTransport;
-import co.elastic.clients.transport.rest_client.RestClientTransport;
+import co.elastic.clients.transport.rest5_client.Rest5ClientTransport;
+import co.elastic.clients.transport.rest5_client.low_level.Rest5Client;
+import co.elastic.clients.transport.rest5_client.low_level.Rest5ClientBuilder;
 
 /**
  * @author Arun
@@ -15,32 +13,27 @@ import co.elastic.clients.transport.rest_client.RestClientTransport;
  */
 public class ElasticSearchClient {
 
-    private final ElasticsearchClient client;
-    private final RestClient restClient;
-    private final ElasticsearchTransport transport;
+	private final ElasticsearchClient client;
+	private final Rest5Client rest5Client;
+	private final ElasticsearchTransport transport;
 
-    public ElasticSearchClient(RestClientBuilder restClientBuilder) {
-        this.restClient = restClientBuilder.build();
-        this.transport = new RestClientTransport(
-                restClient,
-                new JacksonJsonpMapper());
-        this.client = new ElasticsearchClient(transport);
-    }
+	public ElasticSearchClient(Rest5ClientBuilder rest5ClientBuilder) {
+		this.rest5Client = rest5ClientBuilder.build();
+		this.transport = new Rest5ClientTransport(rest5Client, new JacksonJsonpMapper());
+		this.client = new ElasticsearchClient(transport);
+	}
 
-    public ElasticsearchClient getClient() {
-        return client;
-    }
+	public ElasticsearchClient getClient() {
+		return client;
+	}
 
-    public RestClient getLowLevelClient() {
-        return restClient;
-    }
+	public Rest5Client getLowLevelClient() {
+		return rest5Client;
+	}
 
-    public void close() throws java.io.IOException {
-        if (transport != null) {
-            transport.close();
-        }
-        if (restClient != null) {
-            restClient.close();
-        }
-    }
+	public void close() throws java.io.IOException {
+		if (transport != null) {
+			transport.close();
+		}
+	}
 }
