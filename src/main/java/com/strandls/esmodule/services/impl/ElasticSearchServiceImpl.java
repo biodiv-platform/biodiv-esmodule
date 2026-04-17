@@ -335,69 +335,50 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	private MapResponse querySearch(String index, Query query, MapSearchParams searchParams, String geoAggregationField,
 			Integer geoAggegationPrecision) throws IOException {
 
-		Integer from = searchParams.getFrom() != null ? searchParams.getFrom() : 0;
-		Integer size = searchParams.getLimit() != null ? searchParams.getLimit() : 10;
+		SearchResponse<ObjectNode> searchResponse = client.getClient().search(s -> {
+			s.index(index).trackTotalHits(t -> t.enabled(true));
 
-		SearchResponse<Map> searchResponse;
+			if (query != null) {
+				s.query(query); // Reusing the immutable query
+			}
 
-		if (searchParams.getSortOn() != null) {
-			SortOrder sortOrder = searchParams.getSortType() != null && MapSortType.ASC == searchParams.getSortType()
-					? SortOrder.Asc
-					: SortOrder.Desc;
+			if (searchParams.getFrom() != null)
+				s.from(searchParams.getFrom());
+			if (searchParams.getLimit() != null)
+				s.size(searchParams.getLimit());
+
+			if (searchParams.getSortOn() != null) {
+				SortOrder order = (searchParams.getSortType() != null && MapSortType.ASC == searchParams.getSortType())
+						? SortOrder.Asc
+						: SortOrder.Desc;
+				s.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(order)));
+			}
 
 			if (geoAggregationField != null) {
-				Integer precision = geoAggegationPrecision != null ? geoAggegationPrecision : 1;
-				// Convert Integer precision to GeoHashPrecision
-				GeoHashPrecision geoHashPrecision = GeoHashPrecision.of(g -> g.geohashLength(precision));
-
-				searchResponse = client.getClient().search(s -> s.index(index)
-						.query(query != null ? query : Query.of(q -> q.matchAll(m -> m))).from(from).size(size)
-						.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(sortOrder)))
-						.aggregations("geohash",
-								a -> a.geohashGrid(g -> g.field(geoAggregationField).precision(geoHashPrecision)))
-						.trackTotalHits(t -> t.enabled(true)), Map.class);
-			} else {
-				searchResponse = client.getClient()
-						.search(s -> s.index(index).query(query != null ? query : Query.of(q -> q.matchAll(m -> m)))
-								.from(from).size(size)
-								.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(sortOrder)))
-								.trackTotalHits(t -> t.enabled(true)), Map.class);
+				s.aggregations("geo_agg", getGeoGridAggregationBuilder(geoAggregationField, geoAggegationPrecision));
 			}
-		} else {
-			if (geoAggregationField != null) {
-				Integer precision = geoAggegationPrecision != null ? geoAggegationPrecision : 1;
-				// Convert Integer precision to GeoHashPrecision
-				GeoHashPrecision geoHashPrecision = GeoHashPrecision.of(g -> g.geohashLength(precision));
 
-				searchResponse = client.getClient().search(s -> s.index(index)
-						.query(query != null ? query : Query.of(q -> q.matchAll(m -> m))).from(from).size(size)
-						.aggregations("geohash",
-								a -> a.geohashGrid(g -> g.field(geoAggregationField).precision(geoHashPrecision)))
-						.trackTotalHits(t -> t.enabled(true)), Map.class);
-			} else {
-				searchResponse = client.getClient()
-						.search(s -> s.index(index).query(query != null ? query : Query.of(q -> q.matchAll(m -> m)))
-								.from(from).size(size).trackTotalHits(t -> t.enabled(true)), Map.class);
-			}
-		}
+			return s;
+		}, ObjectNode.class);
 
 		List<MapDocument> result = new ArrayList<>();
+		long totalHits = (searchResponse.hits().total() != null) ? searchResponse.hits().total().value() : 0;
 
-		long totalHits = searchResponse.hits().total().value();
-
-		for (Hit<Map> hit : searchResponse.hits().hits()) {
-			String jsonString = objectMapper.writeValueAsString(hit.source());
-			result.add(new MapDocument(jsonString));
+		for (Hit<ObjectNode> hit : searchResponse.hits().hits()) {
+			if (hit.source() != null) {
+				result.add(new MapDocument(hit.source().toString()));
+			}
 		}
 
-		logger.info("Search completed with total hits: {}", totalHits);
-
 		String aggregationString = null;
-		if (geoAggregationField != null && searchResponse.aggregations() != null) {
-			Aggregate agg = searchResponse.aggregations().get("geohash");
-			if (agg != null) {
-				aggregationString = objectMapper.writeValueAsString(agg.geohashGrid());
+		if (geoAggregationField != null && searchResponse.aggregations().containsKey("geo_agg")) {
+			Aggregate aggregate = searchResponse.aggregations().get("geo_agg");
+			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+			JsonpMapper mapper = client.getClient()._jsonpMapper();
+			try (JsonGenerator generator = mapper.jsonProvider().createGenerator(baos)) {
+				mapper.serialize(aggregate, generator);
 			}
+			aggregationString = baos.toString();
 		}
 
 		return new MapResponse(result, totalHits, aggregationString);
@@ -1150,11 +1131,16 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		MapSearchParams searchParams = searchQuery.getSearchParams();
 
-		BoolQuery.Builder masterBoolQuery = getBoolQueryBuilder(searchQuery);
+		// 1. Create the base builder
+		BoolQuery.Builder masterBoolQueryBuilder = getBoolQueryBuilder(searchQuery);
+
+		// 2. Build the initial immutable Query object
+		Query currentQuery = masterBoolQueryBuilder.build()._toQuery();
 
 		Aggregation geoGridAggregation = getGeoGridAggregationBuilder(geoAggregationField, geoAggegationPrecision);
 
-		MapDocument aggregateResult = aggregateSearch(indexParam, geoGridAggregation, masterBoolQuery);
+		// 3. Perform initial aggregate search using the immutable Query
+		MapDocument aggregateResult = aggregateSearch(indexParam, geoGridAggregation, currentQuery);
 		String geohashAggregation = (aggregateResult != null) ? aggregateResult.getDocument().toString() : null;
 
 		String termsAggregation = null;
@@ -1164,9 +1150,12 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		}
 
 		if (onlyFilteredAggregation != null && onlyFilteredAggregation) {
-			applyMapBounds(searchParams, masterBoolQuery, geoAggregationField);
+			BoolQuery.Builder filteredBuilder = new BoolQuery.Builder().must(currentQuery);
+			applyMapBounds(searchParams, filteredBuilder, geoAggregationField);
 
-			aggregateResult = aggregateSearch(indexParam, geoGridAggregation, masterBoolQuery);
+			Query filteredQuery = filteredBuilder.build()._toQuery();
+
+			aggregateResult = aggregateSearch(indexParam, geoGridAggregation, filteredQuery);
 			if (aggregateResult != null)
 				geohashAggregation = aggregateResult.getDocument().toString();
 
@@ -1174,10 +1163,12 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		}
 
 		if (geoShapeFilterField != null) {
-			applyShapeFilter(searchParams, masterBoolQuery, geoShapeFilterField);
+			BoolQuery.Builder finalBuilder = new BoolQuery.Builder().must(currentQuery);
+			applyShapeFilter(searchParams, finalBuilder, geoShapeFilterField);
+			currentQuery = finalBuilder.build()._toQuery();
 		}
 
-		MapResponse mapResponse = querySearch(indexParam, masterBoolQuery, searchParams, geoAggregationField,
+		MapResponse mapResponse = querySearch(indexParam, currentQuery, searchParams, geoAggregationField,
 				geoAggegationPrecision);
 
 		mapResponse.setViewFilteredGeohashAggregation(mapResponse.getGeohashAggregation());
@@ -1187,93 +1178,26 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		return mapResponse;
 	}
 
-	private MapDocument aggregateSearch(String index, Aggregation aggQuery, BoolQuery.Builder masterBoolQuery)
-			throws IOException {
-
+	private MapDocument aggregateSearch(String index, Aggregation aggQuery, Query query) throws IOException {
 		if (aggQuery == null) {
 			return null;
 		}
 
-		Query query = Query.of(q -> q.bool(masterBoolQuery.build()));
-
-		SearchResponse<ObjectNode> response = client.getClient().search(
-				s -> s.index(index).query(query).aggregations("agg_result", aggQuery).size(0), ObjectNode.class);
+		SearchResponse<ObjectNode> response = client.getClient().search(s -> s.index(index).query(query) // Reusing the
+				.aggregations("agg_result", aggQuery).size(0), ObjectNode.class);
 
 		Aggregate aggregate = response.aggregations().get("agg_result");
-
-		if (aggregate == null) {
+		if (aggregate == null)
 			return null;
-		}
-		String resultJson;
+
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		JsonpMapper mapper = client.getClient()._jsonpMapper();
-
 		try (JsonGenerator generator = mapper.jsonProvider().createGenerator(baos)) {
 			mapper.serialize(aggregate, generator);
 		}
-		resultJson = baos.toString();
 
 		logger.info("Aggregation search completed for index: {}", index);
-
-		return new MapDocument(resultJson);
-	}
-
-	private MapResponse querySearch(String index, BoolQuery.Builder queryBuilder, MapSearchParams searchParams,
-			String geoAggregationField, Integer geoAggegationPrecision) throws IOException {
-
-		SearchResponse<ObjectNode> searchResponse = client.getClient().search(s -> {
-			s.index(index).trackTotalHits(t -> t.enabled(true));
-
-			if (queryBuilder != null) {
-				s.query(q -> q.bool(queryBuilder.build()));
-			}
-
-			if (searchParams.getFrom() != null)
-				s.from(searchParams.getFrom());
-			if (searchParams.getLimit() != null)
-				s.size(searchParams.getLimit());
-
-			if (searchParams.getSortOn() != null) {
-				SortOrder order = (searchParams.getSortType() != null && MapSortType.ASC == searchParams.getSortType())
-						? SortOrder.Asc
-						: SortOrder.Desc;
-				s.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(order)));
-			}
-
-			if (geoAggregationField != null) {
-				s.aggregations("geo_agg", getGeoGridAggregationBuilder(geoAggregationField, geoAggegationPrecision));
-			}
-
-			return s;
-		}, ObjectNode.class);
-
-		List<MapDocument> result = new ArrayList<>();
-		long totalHits = (searchResponse.hits().total() != null) ? searchResponse.hits().total().value() : 0;
-
-		for (Hit<ObjectNode> hit : searchResponse.hits().hits()) {
-			if (hit.source() != null) {
-				result.add(new MapDocument(hit.source().toString()));
-			}
-		}
-
-		logger.info("Search completed with total hits: {}", totalHits);
-
-		String aggregationString = null;
-		if (geoAggregationField != null && searchResponse.aggregations().containsKey("geo_agg")) {
-			Aggregate aggregate = searchResponse.aggregations().get("geo_agg");
-
-			ByteArrayOutputStream baos = new ByteArrayOutputStream();
-			JsonpMapper mapper = client.getClient()._jsonpMapper();
-
-			try (JsonGenerator generator = mapper.jsonProvider().createGenerator(baos)) {
-				mapper.serialize(aggregate, generator);
-			}
-
-			aggregationString = baos.toString();
-			logger.info("Aggregation search: geo_agg completed");
-		}
-
-		return new MapResponse(result, totalHits, aggregationString);
+		return new MapDocument(baos.toString());
 	}
 
 	@Override
