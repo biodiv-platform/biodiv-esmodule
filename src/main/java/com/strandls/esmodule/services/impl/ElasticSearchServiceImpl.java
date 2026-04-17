@@ -1,5 +1,6 @@
 package com.strandls.esmodule.services.impl;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,6 +21,7 @@ import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 // ES 9 Client and Core
 import co.elastic.clients.elasticsearch._types.*;
@@ -32,6 +34,8 @@ import co.elastic.clients.elasticsearch.core.search.*;
 import co.elastic.clients.elasticsearch.indices.*;
 import co.elastic.clients.elasticsearch.indices.get_mapping.IndexMappingRecord;
 import co.elastic.clients.json.JsonData;
+import co.elastic.clients.json.JsonpMapper;
+import co.elastic.clients.json.JsonpUtils;
 import co.elastic.clients.util.NamedValue;
 
 import com.strandls.es.ElasticSearchClient;
@@ -71,6 +75,7 @@ import com.strandls.esmodule.models.query.MapSearchQuery;
 import com.strandls.esmodule.services.ElasticSearchService;
 
 import jakarta.inject.Inject;
+import jakarta.json.stream.JsonGenerator;
 
 /**
  * Implementation of {@link ElasticSearchService}
@@ -994,7 +999,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		// String terms
 		if (agg.isSterms()) {
 			for (StringTermsBucket bucket : agg.sterms().buckets().array()) {
-				groupAggregation.put(bucket.key().toString(), bucket.docCount());
+				groupAggregation.put(bucket.key().stringValue(), bucket.docCount());
 			}
 		}
 		// Long terms
@@ -1018,9 +1023,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		// Missing
 		else if (agg.isMissing()) {
 			groupAggregation.put("missing", agg.missing().docCount());
-		}
-		// Filter
-		else if (agg.isFilter()) {
+		} else if (agg.isFilter()) {
 			groupAggregation.put(Constants.AVAILABLE, agg.filter().docCount());
 		}
 		// Nested
@@ -1031,7 +1034,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 				if (nestedInner.isSterms()) {
 					for (StringTermsBucket bucket : nestedInner.sterms().buckets().array()) {
-						groupAggregation.put(bucket.key().toString(), bucket.docCount());
+						groupAggregation.put(bucket.key().stringValue(), bucket.docCount());
 					}
 				} else if (nestedInner.isLterms()) {
 					for (LongTermsBucket bucket : nestedInner.lterms().buckets().array()) {
@@ -1138,11 +1141,139 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	}
 
 	@Override
-	public MapResponse search(String index, String type, MapSearchQuery query, String geoAggregationField,
+	public MapResponse search(String index, String type, MapSearchQuery searchQuery, String geoAggregationField,
 			Integer geoAggegationPrecision, Boolean onlyFilteredAggregation, String termsAggregationField,
-			String geoFilterField) throws IOException {
-		// TODO Auto-generated method stub
-		return null;
+			String geoShapeFilterField) throws IOException {
+
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		logger.info("SEARCH for index: {}", indexParam);
+
+		MapSearchParams searchParams = searchQuery.getSearchParams();
+
+		BoolQuery.Builder masterBoolQuery = getBoolQueryBuilder(searchQuery);
+
+		Aggregation geoGridAggregation = getGeoGridAggregationBuilder(geoAggregationField, geoAggegationPrecision);
+
+		MapDocument aggregateResult = aggregateSearch(indexParam, geoGridAggregation, masterBoolQuery);
+		String geohashAggregation = (aggregateResult != null) ? aggregateResult.getDocument().toString() : null;
+
+		String termsAggregation = null;
+		if (termsAggregationField != null) {
+			termsAggregation = termsAggregation(indexParam, type, termsAggregationField, null, null,
+					geoAggregationField, searchQuery).getDocument().toString();
+		}
+
+		if (onlyFilteredAggregation != null && onlyFilteredAggregation) {
+			applyMapBounds(searchParams, masterBoolQuery, geoAggregationField);
+
+			aggregateResult = aggregateSearch(indexParam, geoGridAggregation, masterBoolQuery);
+			if (aggregateResult != null)
+				geohashAggregation = aggregateResult.getDocument().toString();
+
+			return new MapResponse(new ArrayList<>(), 0, geohashAggregation, geohashAggregation, termsAggregation);
+		}
+
+		if (geoShapeFilterField != null) {
+			applyShapeFilter(searchParams, masterBoolQuery, geoShapeFilterField);
+		}
+
+		MapResponse mapResponse = querySearch(indexParam, masterBoolQuery, searchParams, geoAggregationField,
+				geoAggegationPrecision);
+
+		mapResponse.setViewFilteredGeohashAggregation(mapResponse.getGeohashAggregation());
+		mapResponse.setGeohashAggregation(geohashAggregation);
+		mapResponse.setTermsAggregation(termsAggregation);
+
+		return mapResponse;
+	}
+
+	private MapDocument aggregateSearch(String index, Aggregation aggQuery, BoolQuery.Builder masterBoolQuery)
+			throws IOException {
+
+		if (aggQuery == null) {
+			return null;
+		}
+
+		Query query = Query.of(q -> q.bool(masterBoolQuery.build()));
+
+		SearchResponse<ObjectNode> response = client.getClient().search(
+				s -> s.index(index).query(query).aggregations("agg_result", aggQuery).size(0), ObjectNode.class);
+
+		Aggregate aggregate = response.aggregations().get("agg_result");
+
+		if (aggregate == null) {
+			return null;
+		}
+		String resultJson;
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		JsonpMapper mapper = client.getClient()._jsonpMapper();
+
+		try (JsonGenerator generator = mapper.jsonProvider().createGenerator(baos)) {
+			mapper.serialize(aggregate, generator);
+		}
+		resultJson = baos.toString();
+
+		logger.info("Aggregation search completed for index: {}", index);
+
+		return new MapDocument(resultJson);
+	}
+
+	private MapResponse querySearch(String index, BoolQuery.Builder queryBuilder, MapSearchParams searchParams,
+			String geoAggregationField, Integer geoAggegationPrecision) throws IOException {
+
+		SearchResponse<ObjectNode> searchResponse = client.getClient().search(s -> {
+			s.index(index).trackTotalHits(t -> t.enabled(true));
+
+			if (queryBuilder != null) {
+				s.query(q -> q.bool(queryBuilder.build()));
+			}
+
+			if (searchParams.getFrom() != null)
+				s.from(searchParams.getFrom());
+			if (searchParams.getLimit() != null)
+				s.size(searchParams.getLimit());
+
+			if (searchParams.getSortOn() != null) {
+				SortOrder order = (searchParams.getSortType() != null && MapSortType.ASC == searchParams.getSortType())
+						? SortOrder.Asc
+						: SortOrder.Desc;
+				s.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(order)));
+			}
+
+			if (geoAggregationField != null) {
+				s.aggregations("geo_agg", getGeoGridAggregationBuilder(geoAggregationField, geoAggegationPrecision));
+			}
+
+			return s;
+		}, ObjectNode.class);
+
+		List<MapDocument> result = new ArrayList<>();
+		long totalHits = (searchResponse.hits().total() != null) ? searchResponse.hits().total().value() : 0;
+
+		for (Hit<ObjectNode> hit : searchResponse.hits().hits()) {
+			if (hit.source() != null) {
+				result.add(new MapDocument(hit.source().toString()));
+			}
+		}
+
+		logger.info("Search completed with total hits: {}", totalHits);
+
+		String aggregationString = null;
+		if (geoAggregationField != null && searchResponse.aggregations().containsKey("geo_agg")) {
+			Aggregate aggregate = searchResponse.aggregations().get("geo_agg");
+
+			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+			JsonpMapper mapper = client.getClient()._jsonpMapper();
+
+			try (JsonGenerator generator = mapper.jsonProvider().createGenerator(baos)) {
+				mapper.serialize(aggregate, generator);
+			}
+
+			aggregationString = baos.toString();
+			logger.info("Aggregation search: geo_agg completed");
+		}
+
+		return new MapResponse(result, totalHits, aggregationString);
 	}
 
 	@Override

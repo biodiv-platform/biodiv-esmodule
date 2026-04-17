@@ -442,6 +442,21 @@ public class ElasticSearchQueryUtil {
 		return masterBoolQuery.build()._toQuery();
 	}
 
+	protected BoolQuery.Builder getBoolQueryBuilder(MapSearchQuery searchQuery) {
+
+		BoolQuery.Builder masterBoolQuery = new BoolQuery.Builder();
+
+		if (searchQuery == null)
+			return masterBoolQuery;
+
+		buildBoolQueries(searchQuery.getAndBoolQueries(), searchQuery.getOrBoolQueries(), masterBoolQuery);
+		buildRangeQueries(searchQuery.getAndRangeQueries(), searchQuery.getOrRangeQueries(), masterBoolQuery);
+		buildExistsQueries(searchQuery.getAndExistQueries(), masterBoolQuery);
+		buildMatchPhraseQueries(searchQuery.getAndMatchPhraseQueries(), searchQuery.getOrMatchPhraseQueries(),
+				masterBoolQuery);
+		return masterBoolQuery;
+	}
+
 	public Query getBoolQueryBuilderObservationPan(String id, Boolean isMaxVotedRecoId) {
 
 		if (isMaxVotedRecoId)
@@ -450,7 +465,7 @@ public class ElasticSearchQueryUtil {
 			return MatchPhraseQuery.of(m -> m.field("max_voted_reco.hierarchy.taxon_id").query(id))._toQuery();
 	}
 
-	protected Aggregation getGeoGridAggregation(String field, Integer precision) {
+	protected Aggregation getGeoGridAggregationBuilder(String field, Integer precision) {
 		if (field == null)
 			return null;
 
