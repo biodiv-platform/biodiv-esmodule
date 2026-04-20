@@ -1628,15 +1628,29 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		}
 
 		Aggregate authorAgg = searchResponse.aggregations().get(Constants.GROUP_BY_AUTHOR);
-		if (authorAgg == null || authorAgg.sterms() == null) {
+		if (authorAgg == null) {
 			return topAuthors;
 		}
 
-		for (StringTermsBucket bucket : authorAgg.sterms().buckets().array()) {
-			try {
-				topAuthors.add(Integer.parseInt(bucket.key().stringValue()));
-			} catch (Exception e) {
-				logger.error("Error parsing user ID bucket: {}", e.getMessage(), e);
+		// Check if the aggregation result is Long Terms (lterms)
+		if (authorAgg.isLterms()) {
+			for (LongTermsBucket bucket : authorAgg.lterms().buckets().array()) {
+				try {
+					// For lterms, bucket.key() returns a long
+					topAuthors.add((int) bucket.key());
+				} catch (Exception e) {
+					logger.error("Error parsing Long user ID bucket: {}", e.getMessage(), e);
+				}
+			}
+		}
+		// Fallback if it's String Terms (sterms)
+		else if (authorAgg.isSterms()) {
+			for (StringTermsBucket bucket : authorAgg.sterms().buckets().array()) {
+				try {
+					topAuthors.add(Integer.parseInt(bucket.key().stringValue()));
+				} catch (Exception e) {
+					logger.error("Error parsing String user ID bucket: {}", e.getMessage(), e);
+				}
 			}
 		}
 
@@ -1653,65 +1667,83 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		}
 
 		Aggregate authorAgg = searchResponse.aggregations().get(Constants.GROUP_BY_AUTHOR);
-		if (authorAgg == null || authorAgg.sterms() == null) {
+		if (authorAgg == null) {
 			return records;
 		}
 
-		for (StringTermsBucket authorBucket : authorAgg.sterms().buckets().array()) {
-
-			LinkedHashMap<String, LinkedHashMap<String, String>> moduleRecords = new LinkedHashMap<>();
-
-			Aggregate moduleAgg = authorBucket.aggregations().get("bucket_by_module");
-			if (moduleAgg != null && moduleAgg.sterms() != null) {
-				for (StringTermsBucket moduleBucket : moduleAgg.sterms().buckets().array()) {
-
-					LinkedHashMap<String, String> activities = new LinkedHashMap<>();
-
-					Aggregate activityAgg = moduleBucket.aggregations().get("bucket_by_activity_category");
-					if (activityAgg != null && activityAgg.sterms() != null) {
-						for (StringTermsBucket activityBucket : activityAgg.sterms().buckets().array()) {
-							activities.put(activityBucket.key().stringValue().toLowerCase(),
-									String.valueOf(activityBucket.docCount()));
-						}
-					}
-
-					moduleRecords.put(moduleBucket.key().stringValue().toLowerCase(), activities);
-				}
+		// Handle Long variant (lterms)
+		if (authorAgg.isLterms()) {
+			for (LongTermsBucket authorBucket : authorAgg.lterms().buckets().array()) {
+				// Pass the aggregations map and the stringified ID
+				records.add(processBucketLogic(authorBucket.aggregations(), String.valueOf(authorBucket.key())));
 			}
-
-			LinkedHashMap<String, String> userDetails = new LinkedHashMap<>();
-
-			Aggregate detailTerms = authorBucket.aggregations().get(Constants.AUTHOR_NAME);
-			if (detailTerms != null && detailTerms.sterms() != null) {
-				for (StringTermsBucket bucket : detailTerms.sterms().buckets().array()) {
-					userDetails.put("authorName", bucket.key().stringValue());
-				}
+		}
+		// Handle String variant (sterms)
+		else if (authorAgg.isSterms()) {
+			for (StringTermsBucket authorBucket : authorAgg.sterms().buckets().array()) {
+				// Pass the aggregations map and the stringified ID
+				records.add(processBucketLogic(authorBucket.aggregations(), authorBucket.key().stringValue()));
 			}
-
-			userDetails.put(Constants.AUTHOR_ID, authorBucket.key().stringValue());
-
-			detailTerms = authorBucket.aggregations().get(Constants.PROFILE_PIC);
-			if (detailTerms != null && detailTerms.sterms() != null) {
-				for (StringTermsBucket bucket : detailTerms.sterms().buckets().array()) {
-					userDetails.put("profilePic", bucket.key().stringValue());
-				}
-			}
-
-			Aggregate activityScoreAgg = authorBucket.aggregations().get(Constants.ACTIVITY_SCORE);
-			if (activityScoreAgg != null && activityScoreAgg.simpleValue() != null) {
-				double score = activityScoreAgg.simpleValue().value();
-				if (score >= 0.0d) {
-					userDetails.put(Constants.ACTIVITY_SCORE, String.valueOf(score));
-				} else {
-					userDetails.put(Constants.ACTIVITY_SCORE, "0.0");
-				}
-			}
-
-			moduleRecords.put("details", userDetails);
-			records.add(moduleRecords);
 		}
 
 		return records;
+	}
+
+	/**
+	 * Helper method that takes the Map of sub-aggregations. This avoids needing a
+	 * shared Bucket base class.
+	 */
+	private LinkedHashMap<String, LinkedHashMap<String, String>> processBucketLogic(Map<String, Aggregate> aggs,
+			String authorId) {
+		LinkedHashMap<String, LinkedHashMap<String, String>> moduleRecords = new LinkedHashMap<>();
+
+		// 1. Process modules
+		Aggregate moduleAgg = aggs.get("bucket_by_module");
+		if (moduleAgg != null && moduleAgg.isSterms()) {
+			for (StringTermsBucket moduleBucket : moduleAgg.sterms().buckets().array()) {
+				LinkedHashMap<String, String> activities = new LinkedHashMap<>();
+
+				Aggregate activityAgg = moduleBucket.aggregations().get("bucket_by_activity_category");
+				if (activityAgg != null && activityAgg.isSterms()) {
+					for (StringTermsBucket activityBucket : activityAgg.sterms().buckets().array()) {
+						activities.put(activityBucket.key().stringValue().toLowerCase(),
+								String.valueOf(activityBucket.docCount()));
+					}
+				}
+				moduleRecords.put(moduleBucket.key().stringValue().toLowerCase(), activities);
+			}
+		}
+
+		// 2. Process User Details
+		LinkedHashMap<String, String> userDetails = new LinkedHashMap<>();
+
+		// Author Name
+		Aggregate nameAgg = aggs.get(Constants.AUTHOR_NAME);
+		if (nameAgg != null && nameAgg.isSterms()) {
+			for (StringTermsBucket bucket : nameAgg.sterms().buckets().array()) {
+				userDetails.put("authorName", bucket.key().stringValue());
+			}
+		}
+
+		userDetails.put(Constants.AUTHOR_ID, authorId);
+
+		// Profile Pic
+		Aggregate picAgg = aggs.get(Constants.PROFILE_PIC);
+		if (picAgg != null && picAgg.isSterms()) {
+			for (StringTermsBucket bucket : picAgg.sterms().buckets().array()) {
+				userDetails.put("profilePic", bucket.key().stringValue());
+			}
+		}
+
+		// Activity Score
+		Aggregate activityScoreAgg = aggs.get(Constants.ACTIVITY_SCORE);
+		if (activityScoreAgg != null && activityScoreAgg.isSimpleValue()) {
+			double score = activityScoreAgg.simpleValue().value();
+			userDetails.put(Constants.ACTIVITY_SCORE, String.valueOf(Math.max(score, 0.0d)));
+		}
+
+		moduleRecords.put("details", userDetails);
+		return moduleRecords;
 	}
 
 	@Override
