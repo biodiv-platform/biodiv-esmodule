@@ -5,9 +5,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.strandls.esmodule.ApiConstants;
 import com.strandls.esmodule.ErrorConstants;
@@ -66,8 +63,6 @@ import jakarta.ws.rs.core.Response.Status;
 @Tag(name = "ES services")
 @Path(ApiConstants.V1 + ApiConstants.SERVICES)
 public class ESController {
-
-	private final Logger logger = LoggerFactory.getLogger(ESController.class);
 
 	@Inject
 	public ElasticSearchService elasticSearchService;
@@ -231,7 +226,6 @@ public class ESController {
 			@ApiResponse(responseCode = "200", description = "Success", content = @Content(array = @ArraySchema(schema = @Schema(implementation = MapQueryResponse.class)))),
 			@ApiResponse(responseCode = "400", description = "No Documents to update"),
 			@ApiResponse(responseCode = "500", description = "ERROR") })
-	@SuppressWarnings("resource")
 	public List<MapQueryResponse> bulkUpdate(@PathParam("index") String index, @PathParam("type") String type,
 			@Parameter(name = "updateDocs") List<Map<String, Object>> updateDocs) {
 		if (updateDocs == null)
