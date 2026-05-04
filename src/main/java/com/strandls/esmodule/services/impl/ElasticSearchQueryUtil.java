@@ -332,40 +332,59 @@ public class ElasticSearchQueryUtil {
 	private void buildRangeQueries(List<MapAndRangeQuery> andQueries, List<MapOrRangeQuery> orQueries,
 			BoolQuery.Builder masterBoolQuery) {
 
-		if (andQueries != null) {
-			List<MapAndRangeQuery> nonNestedOrList = andQueries.stream()
-					.filter(p -> (p.getPath() == null || p.getPath().isEmpty())).collect(Collectors.toList());
+		// --- AND QUERIES ---
+		if (andQueries != null && !andQueries.isEmpty()) {
+			Map<Boolean, List<MapAndRangeQuery>> partitioned = andQueries.stream()
+					.collect(Collectors.partitioningBy(p -> (p.getPath() != null && !p.getPath().isEmpty())));
 
-			List<MapAndRangeQuery> nestedOrList = andQueries.stream()
-					.filter(p -> (p.getPath() != null && !p.getPath().isEmpty())).collect(Collectors.toList());
+			buildNestedRangeAndQuery(partitioned.get(true), masterBoolQuery);
 
-			buildNestedRangeAndQuery(nestedOrList, masterBoolQuery);
-
-			BoolQuery.Builder boolQuery = new BoolQuery.Builder();
-			for (MapAndRangeQuery query : nonNestedOrList) {
-				if (query.getStart() != null && query.getEnd() != null)
-					boolQuery.must(getRangeQuery(query));
+			List<MapAndRangeQuery> nonNested = partitioned.get(false);
+			if (!nonNested.isEmpty()) {
+				BoolQuery.Builder andBlock = new BoolQuery.Builder();
+				boolean hasContent = false;
+				for (MapAndRangeQuery query : nonNested) {
+					if (query.getStart() != null || query.getEnd() != null) {
+						Query rQ = getRangeQuery(query);
+						if (rQ != null) {
+							andBlock.must(rQ);
+							hasContent = true;
+						}
+					}
+				}
+				// Only build and add if we actually added a range
+				if (hasContent) {
+					masterBoolQuery.must(andBlock.build()._toQuery());
+				}
 			}
-			if (!nonNestedOrList.isEmpty())
-				masterBoolQuery.must(boolQuery.build()._toQuery());
 		}
 
-		if (orQueries != null) {
-			List<MapOrRangeQuery> nonNestedOrList = orQueries.stream()
-					.filter(p -> (p.getPath() == null || p.getPath().isEmpty())).collect(Collectors.toList());
+		// --- OR QUERIES (Media Filters) ---
+		if (orQueries != null && !orQueries.isEmpty()) {
+			Map<Boolean, List<MapOrRangeQuery>> partitioned = orQueries.stream()
+					.collect(Collectors.partitioningBy(p -> (p.getPath() != null && !p.getPath().isEmpty())));
 
-			List<MapOrRangeQuery> nestedOrList = orQueries.stream()
-					.filter(p -> (p.getPath() != null && !p.getPath().isEmpty())).collect(Collectors.toList());
+			buildNestedRangeOrQuery(partitioned.get(true), masterBoolQuery);
 
-			buildNestedRangeOrQuery(nestedOrList, masterBoolQuery);
-
-			BoolQuery.Builder boolQuery = new BoolQuery.Builder();
-			for (MapOrRangeQuery query : nonNestedOrList) {
-				if (query.getStart() != null && query.getEnd() != null)
-					boolQuery.should(getRangeQuery(query));
+			List<MapOrRangeQuery> nonNested = partitioned.get(false);
+			if (!nonNested.isEmpty()) {
+				BoolQuery.Builder orBlock = new BoolQuery.Builder();
+				boolean hasContent = false;
+				for (MapOrRangeQuery query : nonNested) {
+					if (query.getStart() != null || query.getEnd() != null) {
+						Query rQ = getRangeQuery(query);
+						if (rQ != null) {
+							orBlock.should(rQ);
+							hasContent = true;
+						}
+					}
+				}
+				if (hasContent) {
+					// IMPORTANT: Only set this if there are multiple 'should' clauses
+					orBlock.minimumShouldMatch("1");
+					masterBoolQuery.must(orBlock.build()._toQuery());
+				}
 			}
-			if (!nonNestedOrList.isEmpty())
-				masterBoolQuery.must(boolQuery.build()._toQuery());
 		}
 	}
 
