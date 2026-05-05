@@ -940,11 +940,22 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	private AggregationResponse groupAggregation(String index, Aggregation aggregation, Query query, String filter)
 			throws IOException {
 
+		String targetIndex = filter.split("\\|")[0].equals("taxon_path") ? "extended_taxon_definition" : index;
+
 		SearchResponse<Void> response = client.getClient().search(s -> {
-			var search = s.index(index).size(0);
+			var search = s.index(targetIndex).size(0);
+
 			if (query != null) {
-				search = search.query(query);
+				if (filter.split("\\|")[0].equals("taxon_path")) {
+					String[] parts = filter.split("\\|");
+					String taxonPathRegex = (parts.length > 1 && !parts[1].isEmpty()) ? parts[1] + "\\.[0-9]+"
+							: "[0-9]+(\\.[0-9]+)?";
+					search = search.query(q -> q.regexp(r -> r.field("path.keyword").value(taxonPathRegex)));
+				} else {
+					search = search.query(query);
+				}
 			}
+
 			return search.aggregations("agg_result", aggregation);
 		}, Void.class);
 
@@ -961,8 +972,22 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		for (Map.Entry<String, Aggregate> entry : response.aggregations().entrySet()) {
 			Aggregate agg = entry.getValue();
 
+			if (filter.split("\\|")[0].equals("taxon_path")) {
+				if (agg.isSterms()) {
+					for (StringTermsBucket bucket : agg.sterms().buckets().array()) {
+						Aggregate subAgg = bucket.aggregations().get("raw_name");
+						if (subAgg != null && subAgg.isSterms()) {
+							for (StringTermsBucket subBucket : subAgg.sterms().buckets().array()) {
+								groupAggregation.put(subBucket.key().stringValue() + '|' + bucket.key().stringValue(),
+										(long) 0);
+							}
+						}
+					}
+				}
+			}
+
 			// FIX 2: Check for Traits FIRST to avoid falling into generic isSterms()
-			if (filter.equals(Constants.GROUP_BY_TRAITS) && agg.isSterms()) {
+			else if (filter.equals(Constants.GROUP_BY_TRAITS) && agg.isSterms()) {
 				for (StringTermsBucket bucket : agg.sterms().buckets().array()) {
 					String traitKey = bucket.key().stringValue();
 					Aggregate subAgg = bucket.aggregations().get(Constants.TEMPORAL_AGG);
