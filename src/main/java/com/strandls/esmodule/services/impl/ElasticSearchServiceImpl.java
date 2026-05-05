@@ -280,7 +280,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				failureReason.append(item.error().reason());
 				queryStatus = MapQueryStatus.ERROR;
 			} else {
-				queryStatus = MapQueryStatus.valueOf(item.result());
+				queryStatus = MapQueryStatus.valueOf(item.result().toUpperCase());
 			}
 
 			logger.info(" For index: {}, type: {}, bulk upload id: {}, the status is {}", indexParam, typeParam,
