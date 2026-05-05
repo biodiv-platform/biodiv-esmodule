@@ -958,11 +958,20 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	private AggregationResponse groupAggregation(String index, Aggregation aggregation, Query query, String filter)
 			throws IOException {
 
+		String targetIndex = filter.split("\\|")[0].equals("taxon_path") ? "extended_taxon_definition" : index;
+
 		SearchResponse<Void> response = client.getClient().search(s -> {
-			var search = s.index(index).size(0);
+			var search = s.index(targetIndex).size(0);
 
 			if (query != null) {
-				search = search.query(query);
+				if (filter.split("\\|")[0].equals("taxon_path")) {
+					String[] parts = filter.split("\\|");
+					String taxonPathRegex = (parts.length > 1 && !parts[1].isEmpty()) ? parts[1] + "\\.[0-9]+"
+							: "[0-9]+(\\.[0-9]+)?";
+					search = search.query(q -> q.regexp(r -> r.field("path.keyword").value(taxonPathRegex)));
+				} else {
+					search = search.query(query);
+				}
 			}
 
 			return search.aggregations("agg_result", aggregation);
@@ -977,12 +986,28 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			return result;
 		}
 
+		// taxon_path
+		if (filter.split("\\|")[0].equals("taxon_path")) {
+			if (agg.isSterms()) {
+				for (StringTermsBucket bucket : agg.sterms().buckets().array()) {
+					Aggregate subAgg = bucket.aggregations().get("raw_name");
+					if (subAgg != null && subAgg.isSterms()) {
+						for (StringTermsBucket subBucket : subAgg.sterms().buckets().array()) {
+							groupAggregation.put(subBucket.key().stringValue() + '|' + bucket.key().stringValue(),
+									(long) 0);
+						}
+					}
+				}
+			}
+		}
+
 		// String terms
-		if (agg.isSterms()) {
+		else if (agg.isSterms()) {
 			for (StringTermsBucket bucket : agg.sterms().buckets().array()) {
 				groupAggregation.put(bucket.key().stringValue(), bucket.docCount());
 			}
 		}
+
 		// Long terms
 		else if (agg.isLterms()) {
 			for (LongTermsBucket bucket : agg.lterms().buckets().array()) {
