@@ -35,7 +35,6 @@ import co.elastic.clients.elasticsearch.indices.*;
 import co.elastic.clients.elasticsearch.indices.get_mapping.IndexMappingRecord;
 import co.elastic.clients.json.JsonData;
 import co.elastic.clients.json.JsonpMapper;
-import co.elastic.clients.json.JsonpUtils;
 import co.elastic.clients.util.NamedValue;
 
 import com.strandls.es.ElasticSearchClient;
@@ -829,10 +828,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			return new Aggregation.Builder().terms(t -> t.field(filter).size(20000).order(getCountDescOrder())).build();
 
 		} else if (filter.split("\\|")[0].equals("uploaders")) {
-
 			String[] parts = filter.split("\\|");
 			boolean speciesSort = parts.length > 1 && "species".equals(parts[1]);
-
 			Map<String, Aggregation> subAggs = new HashMap<>();
 			subAggs.put("exact_count", buildExactCountAggregation());
 
@@ -841,21 +838,17 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 						new Aggregation.Builder().cardinality(
 								c -> c.field("max_voted_reco.scientific_name.keyword").precisionThreshold(40000))
 								.build());
-
 				return new Aggregation.Builder().terms(
 						t -> t.field(Constants.AUTHOR_ID).size(20000).order(getAggDescOrder("species_cardinality")))
 						.aggregations(subAggs).build();
 			}
-
 			return new Aggregation.Builder()
 					.terms(t -> t.field(Constants.AUTHOR_ID).size(20000).order(getCountDescOrder()))
 					.aggregations(subAggs).build();
 
 		} else if (filter.split("\\|")[0].equals("identifiers")) {
-
 			String[] parts = filter.split("\\|");
 			boolean speciesSort = parts.length > 1 && "species".equals(parts[1]);
-
 			Map<String, Aggregation> subAggs = new HashMap<>();
 			subAggs.put("exact_count", buildExactCountAggregation());
 
@@ -864,28 +857,22 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 						new Aggregation.Builder().cardinality(
 								c -> c.field("max_voted_reco.scientific_name.keyword").precisionThreshold(40000))
 								.build());
-
 				return new Aggregation.Builder().terms(
 						t -> t.field(Constants.IDENTIFIER_ID).size(20000).order(getAggDescOrder("species_cardinality")))
 						.aggregations(subAggs).build();
 			}
-
 			return new Aggregation.Builder()
 					.terms(t -> t.field(Constants.IDENTIFIER_ID).size(20000).order(getCountDescOrder()))
 					.aggregations(subAggs).build();
 
 		} else if (filter.contains("nested")) {
-
 			String nestedField = filter.split("\\.")[1];
 			String nestedFilter = filter.replace("nested.", "");
-
 			Map<String, Aggregation> subAggs = new HashMap<>();
 			subAggs.put(nestedFilter, new Aggregation.Builder().terms(t -> t.field(nestedFilter).size(1000)).build());
-
 			return new Aggregation.Builder().nested(n -> n.path(nestedField)).aggregations(subAggs).build();
 
 		} else if (filter.equals(Constants.GROUP_BY_DAY)) {
-
 			return new Aggregation.Builder()
 					.dateHistogram(
 							d -> d.field("created_on").calendarInterval(CalendarInterval.Day).format("yyyy-MM-dd"))
@@ -893,40 +880,35 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		} else if (filter.split("\\|")[0].equals("min")) {
 
-			return new Aggregation.Builder().min(m -> m.field(filter.split("\\|")[1]).format("YYYY")).build();
+			return new Aggregation.Builder().stats(s -> s.field(filter.split("\\|")[1])).build();
 
-		} else if (filter.equals(Constants.GROUP_BY_OBSERVED)) {
+		} else if (filter.equals(Constants.GROUP_BY_OBSERVED))
 
+		{
 			return new Aggregation.Builder()
 					.dateHistogram(
 							d -> d.field("from_date").calendarInterval(CalendarInterval.Month).format("yyyy-MMM"))
 					.build();
 
 		} else if (filter.equals(Constants.GROUP_BY_TRAITS)) {
-
 			Map<String, Aggregation> subAggs = new HashMap<>();
 			subAggs.put(Constants.TEMPORAL_AGG, new Aggregation.Builder().dateHistogram(d -> d.field("from_date")
 					.calendarInterval(CalendarInterval.Month).format("yyyy-MMM").minDocCount(1)).build());
-
 			return new Aggregation.Builder().terms(t -> t.field("facts.trait_value.trait_aggregation.raw").size(1000))
 					.aggregations(subAggs).build();
 
 		} else if (filter.equals(Constants.GROUP_BY_TAXON)) {
-
 			return new Aggregation.Builder().terms(t -> t.field("max_voted_reco.hierarchy.taxon_id").size(500000))
 					.build();
 
 		} else if (filter.split("\\|")[0].equals("taxon_path")) {
-
 			Map<String, Aggregation> subAggs = new HashMap<>();
 			subAggs.put("raw_name",
 					new Aggregation.Builder().terms(t -> t.field("italicised_form.keyword").size(10)).build());
-
 			return new Aggregation.Builder().terms(t -> t.field("path.keyword").size(200)).aggregations(subAggs)
 					.build();
 
 		} else {
-
 			return new Aggregation.Builder().terms(t -> t.field(filter).size(1000)).build();
 		}
 	}
@@ -971,61 +953,79 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		AggregationResponse result = new AggregationResponse();
 		HashMap<Object, Long> groupAggregation = new HashMap<>();
 
-		Aggregate agg = response.aggregations().get("agg_result");
-		if (agg == null) {
+		if (response.aggregations() == null) {
 			result.setGroupAggregation(groupAggregation);
 			return result;
 		}
 
-		// String terms
-		if (agg.isSterms()) {
-			for (StringTermsBucket bucket : agg.sterms().buckets().array()) {
-				groupAggregation.put(bucket.key().stringValue(), bucket.docCount());
-			}
-		}
-		// Long terms
-		else if (agg.isLterms()) {
-			for (LongTermsBucket bucket : agg.lterms().buckets().array()) {
-				groupAggregation.put(bucket.key(), bucket.docCount());
-			}
-		}
-		// Double terms
-		else if (agg.isDterms()) {
-			for (DoubleTermsBucket bucket : agg.dterms().buckets().array()) {
-				groupAggregation.put(bucket.key(), bucket.docCount());
-			}
-		}
-		// Date histogram
-		else if (agg.isDateHistogram()) {
-			for (DateHistogramBucket bucket : agg.dateHistogram().buckets().array()) {
-				groupAggregation.put(bucket.keyAsString(), bucket.docCount());
-			}
-		}
-		// Missing
-		else if (agg.isMissing()) {
-			groupAggregation.put("missing", agg.missing().docCount());
-		} else if (agg.isFilter()) {
-			groupAggregation.put(Constants.AVAILABLE, agg.filter().docCount());
-		}
-		// Nested
-		else if (agg.isNested()) {
-			Map<String, Aggregate> nestedAggs = agg.nested().aggregations();
-			if (nestedAggs != null && !nestedAggs.isEmpty()) {
-				Aggregate nestedInner = nestedAggs.values().iterator().next();
+		// Iterate through all returned aggregations (Fixes Min/Max date issue)
+		for (Map.Entry<String, Aggregate> entry : response.aggregations().entrySet()) {
+			Aggregate agg = entry.getValue();
 
-				if (nestedInner.isSterms()) {
-					for (StringTermsBucket bucket : nestedInner.sterms().buckets().array()) {
-						groupAggregation.put(bucket.key().stringValue(), bucket.docCount());
-					}
-				} else if (nestedInner.isLterms()) {
-					for (LongTermsBucket bucket : nestedInner.lterms().buckets().array()) {
-						groupAggregation.put(bucket.key(), bucket.docCount());
-					}
-				} else if (nestedInner.isDterms()) {
-					for (DoubleTermsBucket bucket : nestedInner.dterms().buckets().array()) {
-						groupAggregation.put(bucket.key(), bucket.docCount());
+			// 1. Handle Min/Max Year via Stats (Numeric timestamps)
+			if (agg.isStats()) {
+				StatsAggregate stats = agg.stats();
+
+				// Use .longValue() to convert the Double wrapper to a primitive long
+				if (stats.min() != null && stats.min() > 0) {
+					long minMillis = stats.min().longValue();
+					String minYear = java.time.Instant.ofEpochMilli(minMillis).atZone(java.time.ZoneId.of("UTC"))
+							.getYear() + "";
+					groupAggregation.put(minYear, 0L);
+				}
+
+				if (stats.max() != null && stats.max() > 0) {
+					long maxMillis = stats.max().longValue();
+					String maxYear = java.time.Instant.ofEpochMilli(maxMillis).atZone(java.time.ZoneId.of("UTC"))
+							.getYear() + "";
+					groupAggregation.put(maxYear, 0L);
+				}
+			}
+			// 2. Handle Traits with Monthly Drill-Down (Fixes "Unknown" Month)
+			else if (filter.equals(Constants.GROUP_BY_TRAITS) && agg.isSterms()) {
+				for (StringTermsBucket bucket : agg.sterms().buckets().array()) {
+					String traitKey = bucket.key().stringValue();
+					Aggregate subAgg = bucket.aggregations().get(Constants.TEMPORAL_AGG);
+
+					if (subAgg != null && subAgg.isDateHistogram()) {
+						Map<String, Long> monthSumDays = new HashMap<>();
+						for (DateHistogramBucket dateBucket : subAgg.dateHistogram().buckets().array()) {
+							// dateBucket.keyAsString() returns "yyyy-MMM" (e.g., "2026-Jan")
+							String dateStr = dateBucket.keyAsString();
+							String monthName = dateStr.contains("-") ? dateStr.split("-")[1] : dateStr;
+							monthSumDays.put(monthName,
+									monthSumDays.getOrDefault(monthName, 0L) + dateBucket.docCount());
+						}
+						// Reconstruct Trait_Month keys (e.g., Weed_Jan)
+						for (String month : months) {
+							groupAggregation.put(traitKey + "_" + month, monthSumDays.getOrDefault(month, 0L));
+						}
 					}
 				}
+			}
+			// 3. Standard String Terms
+			else if (agg.isSterms()) {
+				for (StringTermsBucket bucket : agg.sterms().buckets().array()) {
+					groupAggregation.put(bucket.key().stringValue(), bucket.docCount());
+				}
+			}
+			// 4. Standard Long Terms
+			else if (agg.isLterms()) {
+				for (LongTermsBucket bucket : agg.lterms().buckets().array()) {
+					groupAggregation.put(bucket.key(), bucket.docCount());
+				}
+			}
+			// 5. Standard Date Histogram
+			else if (agg.isDateHistogram()) {
+				for (DateHistogramBucket bucket : agg.dateHistogram().buckets().array()) {
+					groupAggregation.put(bucket.keyAsString(), bucket.docCount());
+				}
+			}
+			// 6. Handle Filter/Missing
+			else if (agg.isFilter()) {
+				groupAggregation.put(Constants.AVAILABLE, agg.filter().docCount());
+			} else if (agg.isMissing()) {
+				groupAggregation.put("missing", agg.missing().docCount());
 			}
 		}
 
