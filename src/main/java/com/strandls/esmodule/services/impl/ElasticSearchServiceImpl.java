@@ -334,31 +334,35 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	private MapResponse querySearch(String index, Query query, MapSearchParams searchParams, String geoAggregationField,
 			Integer geoAggegationPrecision) throws IOException {
 
-		SearchResponse<ObjectNode> searchResponse = client.getClient().search(s -> {
-			s.index(index).trackTotalHits(t -> t.enabled(true));
+		SearchRequest searchRequest = SearchRequest.of(s -> {
+		    s.index(index).trackTotalHits(t -> t.enabled(true));
 
-			if (query != null) {
-				s.query(query); // Reusing the immutable query
-			}
+		    if (query != null) {
+		        s.query(query);
+		    }
 
-			if (searchParams.getFrom() != null)
-				s.from(searchParams.getFrom());
-			if (searchParams.getLimit() != null)
-				s.size(searchParams.getLimit());
+		    if (searchParams.getFrom() != null)
+		        s.from(searchParams.getFrom());
+		    if (searchParams.getLimit() != null)
+		        s.size(searchParams.getLimit());
 
-			if (searchParams.getSortOn() != null) {
-				SortOrder order = (searchParams.getSortType() != null && MapSortType.ASC == searchParams.getSortType())
-						? SortOrder.Asc
-						: SortOrder.Desc;
-				s.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(order)));
-			}
+		    if (searchParams.getSortOn() != null) {
+		        SortOrder order = (searchParams.getSortType() != null && MapSortType.ASC == searchParams.getSortType())
+		                ? SortOrder.Asc
+		                : SortOrder.Desc;
+		        s.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(order)));
+		    }
 
-			if (geoAggregationField != null) {
-				s.aggregations("geo_agg", getGeoGridAggregationBuilder(geoAggregationField, geoAggegationPrecision));
-			}
+		    if (geoAggregationField != null) {
+		        s.aggregations("geo_agg", getGeoGridAggregationBuilder(geoAggregationField, geoAggegationPrecision));
+		    }
 
-			return s;
-		}, ObjectNode.class);
+		    return s;
+		});
+
+		logger.info("ES Request: {}", searchRequest.toString());
+
+		SearchResponse<ObjectNode> searchResponse = client.getClient().search(searchRequest, ObjectNode.class);
 
 		List<MapDocument> result = new ArrayList<>();
 		long totalHits = (searchResponse.hits().total() != null) ? searchResponse.hits().total().value() : 0;
