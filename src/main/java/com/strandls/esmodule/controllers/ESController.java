@@ -887,4 +887,26 @@ public class ESController {
 			return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
 		}
 	}
+
+	
+	@GET
+	@Path("asyncUpdate")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "fetch the observation uploaded freq by user", description = "Returns the maxvotedId freq")
+	@ApiResponses({
+	    @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
+	    @ApiResponse(responseCode = "400", description = "unable to get the result") })
+	public Response updateAsync() {
+	    try {
+	        // Consider making these values configurable or accepting them as parameters
+	        elasticSearchService.asyncUpdateByTaxonId(34265L, "Acacia ferruginea DC. updated", "2024-01-15T10:00:00Z");
+	        return Response.status(Status.OK).entity("Async update initiated successfully").build();
+	    } catch (Exception e) {
+	        // Log the exception properly
+	        e.printStackTrace(); // Replace with proper logging: logger.error("Error in async update", e);
+	        return Response.status(Status.BAD_REQUEST).entity("Failed to initiate async update: " + e.getMessage()).build();
+	    }
+	}
+	
 }

@@ -370,4 +370,6 @@ public interface ElasticSearchService {
 			throws IOException;
 
 	public MapResponse autocompleteSpeciesContributors(String index, String type, String name) throws IOException;
+	
+	public void asyncUpdateByTaxonId(Long targetId, String newName, String timestamp) throws IOException;
 }

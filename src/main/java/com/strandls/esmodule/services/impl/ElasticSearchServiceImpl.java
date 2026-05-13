@@ -36,6 +36,7 @@ import co.elastic.clients.elasticsearch.indices.get_mapping.IndexMappingRecord;
 import co.elastic.clients.json.JsonData;
 import co.elastic.clients.json.JsonpMapper;
 import co.elastic.clients.util.NamedValue;
+import co.elastic.clients.elasticsearch._types.Script;
 
 import com.strandls.es.ElasticSearchClient;
 import com.strandls.esmodule.Constants;
@@ -2350,6 +2351,100 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		logger.info("Autocomplete user search completed. Total hits: {}", totalHits);
 
 		return new MapResponse(result, totalHits, null);
+	}
+	
+	public void asyncUpdateByTaxonId(Long targetId, String newName, String timestamp) throws IOException {
+	    
+	    String painlessScript = """
+	        boolean updated = false;
+	        String newName = params.name;
+	        long targetId = params.targetId;
+
+	        // Update max_voted_reco.id match
+	        if (ctx._source.max_voted_reco?.id == targetId) {
+	            ctx._source.max_voted_reco.scientific_name = newName;
+	            updated = true;
+	        }
+
+	        List recoVotes = ctx._source.all_reco_vote;
+	        if (recoVotes != null) {
+	            int size = recoVotes.size();
+	            for (int i = 0; i < size; i++) {
+	                def reco = recoVotes.get(i);
+	                if (reco?.scientific_name == null) continue;
+
+	                def sciName = reco.scientific_name;
+
+	                if (sciName.accepted_name_id == targetId) {
+	                    sciName.name = newName;
+	                    updated = true;
+	                }
+
+	                def taxonDetail = sciName.taxon_detail;
+	                if (taxonDetail != null && taxonDetail.id == targetId) {
+	                    taxonDetail.name            = newName;
+	                    taxonDetail.scientific_name = newName;
+	                    updated = true;
+	                }
+	            }
+	        }
+
+	        // Update matching entry inside hierarchy[]
+	        List hierarchy = ctx._source.max_voted_reco?.hierarchy;
+	        if (hierarchy != null) {
+	            int size = hierarchy.size();
+	            for (int i = 0; i < size; i++) {
+	                def entry = hierarchy.get(i);
+	                if (entry?.taxon_id == targetId) {
+	                    entry.normalized_name = newName;
+	                    updated = true;
+	                }
+	            }
+	        }
+
+	        if (updated) {
+	            ctx._source.last_revised = params.timestamp;
+	        } else {
+	            ctx.op = 'noop';
+	        }
+	    """;
+
+	    // Build script params
+	    Map<String, JsonData> params = new HashMap<>();
+	    params.put("targetId", JsonData.of(targetId));
+	    params.put("name", JsonData.of(newName));
+	    params.put("timestamp", JsonData.of(timestamp));
+
+	    // Build the bool query with should clauses
+	    Query filterQuery = BoolQuery.of(b -> b
+	        .should(
+	            TermQuery.of(t -> t.field("max_voted_reco.id").value(FieldValue.of(targetId)))._toQuery(),
+	            TermQuery.of(t -> t.field("max_voted_reco.hierarchy.taxon_id").value(FieldValue.of(targetId)))._toQuery(),
+	            TermQuery.of(t -> t.field("all_reco_vote.scientific_name.accepted_name_id").value(FieldValue.of(targetId)))._toQuery(),
+	            TermQuery.of(t -> t.field("all_reco_vote.scientific_name.taxon_detail.id").value(FieldValue.of(targetId)))._toQuery()
+	        )
+	        .minimumShouldMatch("1")
+	    )._toQuery();
+
+	    Script script = Script.of(s -> s
+	    	    .source(src -> src.scriptString(painlessScript))
+	    	    .lang(ScriptLanguage.Painless)
+	    	    .params(params)
+	    );
+
+	    UpdateByQueryRequest updateByQueryRequest = UpdateByQueryRequest.of(u -> u
+	    	    .index("extended_observation")
+	    	    .conflicts(Conflicts.Proceed)
+	    	    .waitForCompletion(false)
+	    	    .script(script)
+	    	    .query(filterQuery)
+	    );
+
+	    
+	    System.out.println(updateByQueryRequest);
+	    /*UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
+
+	    logger.info("UpdateByQuery submitted. Task ID: {}", response.task());*/
 	}
 
 	private String sanitize(String value) {
