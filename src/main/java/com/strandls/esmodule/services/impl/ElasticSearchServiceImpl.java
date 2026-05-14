@@ -3,6 +3,7 @@ package com.strandls.esmodule.services.impl;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -16,6 +17,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+import org.apache.logging.log4j.core.util.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,6 +44,7 @@ import co.elastic.clients.elasticsearch._types.Script;
 
 import com.strandls.es.ElasticSearchClient;
 import com.strandls.esmodule.Constants;
+import com.strandls.esmodule.ESmoduleConfig;
 import com.strandls.esmodule.indexes.pojo.ExtendedTaxonDefinition;
 import com.strandls.esmodule.models.AggregationResponse;
 import com.strandls.esmodule.models.AuthorUploadedObservationInfo;
@@ -2369,7 +2372,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	    params.put("position",        JsonData.of(position));
 	    params.put("timestamp",       JsonData.of(timestamp));
 
-	    String painlessScript = loadScript("update_taxonomy_definition");
+	    String painlessScript = ESmoduleConfig.fetchFileAsString("scripts/update_taxonomy_definition.painless");
 
 	    Script script = Script.of(s -> s
 	        .source(src -> src.scriptString(painlessScript))
@@ -2393,16 +2396,6 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	private String sanitize(String value) {
 		return value == null ? null : value.replaceAll("[\n\r\t]", "_");
-	}
-	
-	private String loadScript(String scriptName) throws IOException {
-	    try (InputStream is = getClass().getClassLoader()
-	            .getResourceAsStream("scripts/" + scriptName + ".painless")) {
-	        if (is == null) {
-	            throw new IOException("Painless script not found: scripts/" + scriptName + ".painless");
-	        }
-	        return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-	    }
 	}
 
 }
