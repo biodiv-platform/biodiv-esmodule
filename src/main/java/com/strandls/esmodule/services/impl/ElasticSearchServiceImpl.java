@@ -2372,7 +2372,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	    params.put("position",        JsonData.of(position));
 	    params.put("timestamp",       JsonData.of(timestamp));
 
-	    String painlessScript = ESmoduleConfig.fetchFileAsString("scripts/update_taxonomy_definition.painless");
+	    String painlessScript = ESmoduleConfig.fetchFileAsString("scripts/updateObservationTaxonomy.painless");
 
 	    Script script = Script.of(s -> s
 	        .source(src -> src.scriptString(painlessScript))
