@@ -900,16 +900,11 @@ public class ESController {
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
 			@ApiResponse(responseCode = "400", description = "unable to get the result") })
-	public Response updateAsync() {
+	public Response updateAsync(@QueryParam("taxonId") Long taxonId, @QueryParam("name") String name,
+			@QueryParam("normalizedName") String normalizedName, @QueryParam("oldName") String oldName,
+			@QueryParam("italicisedForm") String italicisedForm, @QueryParam("canonicalForm") String canonicalForm,
+			@QueryParam("position") String position, @QueryParam("timestamp") String timestamp) {
 		try {
-			Long taxonId = 34265L;
-			String name = "Acacia ferruginea DC. updated";
-			String normalizedName = "Acacia ferruginea DC. updated";
-			String oldName = "Acacia ferruginea DC.";
-			String italicisedForm = "<i>Acacia ferruginea</i> DC. updated";
-			String canonicalForm = "Acacia ferruginea";
-			String position = "WORKING";
-			String timestamp = "2024-01-15T10:00:00Z";
 			Query filterQuery = BoolQuery.of(b -> b.should(
 					TermQuery.of(t -> t.field("max_voted_reco.scientific_name.keyword").value(FieldValue.of(oldName)))
 							._toQuery(),

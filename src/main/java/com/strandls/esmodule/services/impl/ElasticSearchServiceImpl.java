@@ -2390,8 +2390,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	    logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
 
-	    /*UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
-	    logger.info("UpdateByQuery task ID: {}", response.task());*/
+	    UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
+	    logger.info("UpdateByQuery task ID: {}", response.task());
 	}
 
 	private String sanitize(String value) {
