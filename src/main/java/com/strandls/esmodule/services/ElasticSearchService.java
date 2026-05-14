@@ -26,6 +26,8 @@ import com.strandls.esmodule.models.query.MapQuery;
 import com.strandls.esmodule.models.query.MapRangeQuery;
 import com.strandls.esmodule.models.query.MapSearchQuery;
 
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
+
 /**
  * All search services supported by map app
  *
@@ -371,5 +373,7 @@ public interface ElasticSearchService {
 
 	public MapResponse autocompleteSpeciesContributors(String index, String type, String name) throws IOException;
 	
-	public void asyncUpdateByTaxonId(Long targetId, String newName, String timestamp) throws IOException;
+	public void asyncUpdateByTaxonId(Long targetId, String name, String normalizedName, 
+	        String oldName, String italicisedForm, String canonicalForm, 
+	        String position, String timestamp, Query filterQuery) throws IOException;
 }

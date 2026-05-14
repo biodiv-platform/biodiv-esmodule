@@ -36,6 +36,10 @@ import com.strandls.esmodule.services.ElasticAdminSearchService;
 import com.strandls.esmodule.services.ElasticSearchService;
 import com.strandls.esmodule.utils.UtilityMethods;
 
+import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
+import co.elastic.clients.elasticsearch._types.query_dsl.TermQuery;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -888,25 +892,42 @@ public class ESController {
 		}
 	}
 
-	
 	@GET
 	@Path("asyncUpdate")
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "fetch the observation uploaded freq by user", description = "Returns the maxvotedId freq")
 	@ApiResponses({
-	    @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
-	    @ApiResponse(responseCode = "400", description = "unable to get the result") })
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
+			@ApiResponse(responseCode = "400", description = "unable to get the result") })
 	public Response updateAsync() {
-	    try {
-	        // Consider making these values configurable or accepting them as parameters
-	        elasticSearchService.asyncUpdateByTaxonId(34265L, "Acacia ferruginea DC. updated", "2024-01-15T10:00:00Z");
-	        return Response.status(Status.OK).entity("Async update initiated successfully").build();
-	    } catch (Exception e) {
-	        // Log the exception properly
-	        e.printStackTrace(); // Replace with proper logging: logger.error("Error in async update", e);
-	        return Response.status(Status.BAD_REQUEST).entity("Failed to initiate async update: " + e.getMessage()).build();
-	    }
+		try {
+			Long taxonId = 34265L;
+			String name = "Acacia ferruginea DC. updated";
+			String normalizedName = "Acacia ferruginea DC. updated";
+			String oldName = "Acacia ferruginea DC.";
+			String italicisedForm = "<i>Acacia ferruginea</i> DC. updated";
+			String canonicalForm = "Acacia ferruginea";
+			String position = "WORKING";
+			String timestamp = "2024-01-15T10:00:00Z";
+			Query filterQuery = BoolQuery.of(b -> b.should(
+					TermQuery.of(t -> t.field("max_voted_reco.scientific_name.keyword").value(FieldValue.of(oldName)))
+							._toQuery(),
+					TermQuery.of(t -> t.field("max_voted_reco.hierarchy.taxon_id").value(FieldValue.of(taxonId)))
+							._toQuery(),
+					TermQuery.of(
+							t -> t.field("all_reco_vote.scientific_name.taxon_detail.id").value(FieldValue.of(taxonId)))
+							._toQuery())
+					.minimumShouldMatch("1"))._toQuery();
+			elasticSearchService.asyncUpdateByTaxonId(taxonId, name, normalizedName, oldName, italicisedForm,
+					canonicalForm, position, timestamp, filterQuery);
+			return Response.status(Status.OK).entity("Async update initiated successfully").build();
+		} catch (Exception e) {
+			// Log the exception properly
+			e.printStackTrace(); // Replace with proper logging: logger.error("Error in async update", e);
+			return Response.status(Status.BAD_REQUEST).entity("Failed to initiate async update: " + e.getMessage())
+					.build();
+		}
 	}
-	
+
 }

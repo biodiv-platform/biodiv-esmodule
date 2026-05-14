@@ -2,6 +2,8 @@ package com.strandls.esmodule.services.impl;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -2353,102 +2355,54 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		return new MapResponse(result, totalHits, null);
 	}
 	
-	public void asyncUpdateByTaxonId(Long targetId, String newName, String timestamp) throws IOException {
-	    
-	    String painlessScript = """
-	        boolean updated = false;
-	        String newName = params.name;
-	        long targetId = params.targetId;
+	public void asyncUpdateByTaxonId(Long targetId, String name, String normalizedName, 
+	        String oldName, String italicisedForm, String canonicalForm, 
+	        String position, String timestamp, Query filterQuery) throws IOException {
 
-	        // Update max_voted_reco.id match
-	        if (ctx._source.max_voted_reco?.id == targetId) {
-	            ctx._source.max_voted_reco.scientific_name = newName;
-	            updated = true;
-	        }
-
-	        List recoVotes = ctx._source.all_reco_vote;
-	        if (recoVotes != null) {
-	            int size = recoVotes.size();
-	            for (int i = 0; i < size; i++) {
-	                def reco = recoVotes.get(i);
-	                if (reco?.scientific_name == null) continue;
-
-	                def sciName = reco.scientific_name;
-
-	                if (sciName.accepted_name_id == targetId) {
-	                    sciName.name = newName;
-	                    updated = true;
-	                }
-
-	                def taxonDetail = sciName.taxon_detail;
-	                if (taxonDetail != null && taxonDetail.id == targetId) {
-	                    taxonDetail.name            = newName;
-	                    taxonDetail.scientific_name = newName;
-	                    updated = true;
-	                }
-	            }
-	        }
-
-	        // Update matching entry inside hierarchy[]
-	        List hierarchy = ctx._source.max_voted_reco?.hierarchy;
-	        if (hierarchy != null) {
-	            int size = hierarchy.size();
-	            for (int i = 0; i < size; i++) {
-	                def entry = hierarchy.get(i);
-	                if (entry?.taxon_id == targetId) {
-	                    entry.normalized_name = newName;
-	                    updated = true;
-	                }
-	            }
-	        }
-
-	        if (updated) {
-	            ctx._source.last_revised = params.timestamp;
-	        } else {
-	            ctx.op = 'noop';
-	        }
-	    """;
-
-	    // Build script params
 	    Map<String, JsonData> params = new HashMap<>();
-	    params.put("targetId", JsonData.of(targetId));
-	    params.put("name", JsonData.of(newName));
-	    params.put("timestamp", JsonData.of(timestamp));
+	    params.put("targetId",        JsonData.of(targetId));
+	    params.put("name",            JsonData.of(name));
+	    params.put("normalized_name", JsonData.of(normalizedName));
+	    params.put("old_name",        JsonData.of(oldName));
+	    params.put("italicised_form", JsonData.of(italicisedForm));
+	    params.put("canonical_form",  JsonData.of(canonicalForm));
+	    params.put("position",        JsonData.of(position));
+	    params.put("timestamp",       JsonData.of(timestamp));
 
-	    // Build the bool query with should clauses
-	    Query filterQuery = BoolQuery.of(b -> b
-	        .should(
-	            TermQuery.of(t -> t.field("max_voted_reco.id").value(FieldValue.of(targetId)))._toQuery(),
-	            TermQuery.of(t -> t.field("max_voted_reco.hierarchy.taxon_id").value(FieldValue.of(targetId)))._toQuery(),
-	            TermQuery.of(t -> t.field("all_reco_vote.scientific_name.accepted_name_id").value(FieldValue.of(targetId)))._toQuery(),
-	            TermQuery.of(t -> t.field("all_reco_vote.scientific_name.taxon_detail.id").value(FieldValue.of(targetId)))._toQuery()
-	        )
-	        .minimumShouldMatch("1")
-	    )._toQuery();
+	    String painlessScript = loadScript("update_taxonomy_definition");
 
 	    Script script = Script.of(s -> s
-	    	    .source(src -> src.scriptString(painlessScript))
-	    	    .lang(ScriptLanguage.Painless)
-	    	    .params(params)
+	        .source(src -> src.scriptString(painlessScript))
+	        .lang(ScriptLanguage.Painless)
+	        .params(params)
 	    );
 
 	    UpdateByQueryRequest updateByQueryRequest = UpdateByQueryRequest.of(u -> u
-	    	    .index("extended_observation")
-	    	    .conflicts(Conflicts.Proceed)
-	    	    .waitForCompletion(false)
-	    	    .script(script)
-	    	    .query(filterQuery)
+	        .index("extended_observation")
+	        .conflicts(Conflicts.Proceed)
+	        .waitForCompletion(false)
+	        .script(script)
+	        .query(filterQuery)
 	    );
 
-	    
-	    System.out.println(updateByQueryRequest);
-	    /*UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
+	    logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
 
-	    logger.info("UpdateByQuery submitted. Task ID: {}", response.task());*/
+	    /*UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
+	    logger.info("UpdateByQuery task ID: {}", response.task());*/
 	}
 
 	private String sanitize(String value) {
 		return value == null ? null : value.replaceAll("[\n\r\t]", "_");
+	}
+	
+	private String loadScript(String scriptName) throws IOException {
+	    try (InputStream is = getClass().getClassLoader()
+	            .getResourceAsStream("scripts/" + scriptName + ".painless")) {
+	        if (is == null) {
+	            throw new IOException("Painless script not found: scripts/" + scriptName + ".painless");
+	        }
+	        return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+	    }
 	}
 
 }

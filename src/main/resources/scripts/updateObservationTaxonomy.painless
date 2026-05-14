@@ -1,0 +1,54 @@
+boolean updated = false;
+String newName = params.name;
+String italicisedName = params.italicised_form;
+String canonicalName = params.canonical_form;
+String normalizedName = params.normalized_name;
+String oldName = params.old_name;
+String position = params.position;
+long targetId = params.targetId;
+
+if (ctx._source.max_voted_reco?.scientific_name == oldName) {
+    ctx._source.max_voted_reco.scientific_name = normalizedName;
+    ctx._source.max_voted_reco.italicised_form = italicisedName;
+    updated = true;
+}
+
+List recoVotes = ctx._source.all_reco_vote;
+if (recoVotes != null) {
+    int size = recoVotes.size();
+    for (int i = 0; i < size; i++) {
+        def reco = recoVotes.get(i);
+        if (reco?.scientific_name == null) continue;
+
+        def sciName = reco.scientific_name;
+
+        def taxonDetail = sciName.taxon_detail;
+        if (taxonDetail != null && taxonDetail.id == targetId) {
+            sciName.name                = normalizedName;
+            taxonDetail.name            = newName;
+            taxonDetail.scientific_name = normalizedName;
+            taxonDetail.italicised_form = italicisedName;
+            taxonDetail.canonical_form  = canonicalName;
+            taxonDetail.position        = position;
+            updated = true;
+        }
+    }
+}
+
+List hierarchy = ctx._source.max_voted_reco?.hierarchy;
+if (hierarchy != null) {
+    int size = hierarchy.size();
+    for (int i = 0; i < size; i++) {
+        def entry = hierarchy.get(i);
+        if (entry?.taxon_id == targetId) {
+            entry.normalized_name = normalizedName;
+            updated = true;
+        }
+    }
+}
+
+if (updated) {
+    ctx._source.last_revised = params.timestamp;
+} else {
+    ctx.op = 'noop';
+}
