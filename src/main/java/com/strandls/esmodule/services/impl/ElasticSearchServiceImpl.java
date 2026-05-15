@@ -2360,7 +2360,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	
 	public void asyncUpdateByTaxonId(Long targetId, String name, String normalizedName, 
 	        String oldName, String italicisedForm, String canonicalForm, 
-	        String position, String timestamp, Query filterQuery) throws IOException {
+	        String position, String timestamp, Query filterQuery, Query speciesQuery) throws IOException {
 
 	    Map<String, JsonData> params = new HashMap<>();
 	    params.put("targetId",        JsonData.of(targetId));
@@ -2391,6 +2391,27 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	    logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
 
 	    UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
+	    logger.info("UpdateByQuery task ID: {}", response.task());
+	    
+	    String painlessSpeciesScript = ESmoduleConfig.fetchFileAsString("scripts/updateSpeciesTaxonomy.painless");
+
+	    Script speciesScript = Script.of(s -> s
+	        .source(src -> src.scriptString(painlessSpeciesScript))
+	        .lang(ScriptLanguage.Painless)
+	        .params(params)
+	    );
+
+	    updateByQueryRequest = UpdateByQueryRequest.of(u -> u
+	        .index("extended_species")
+	        .conflicts(Conflicts.Proceed)
+	        .waitForCompletion(false)
+	        .script(speciesScript)
+	        .query(speciesQuery)
+	    );
+
+	    logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
+
+	    response = client.getClient().updateByQuery(updateByQueryRequest);
 	    logger.info("UpdateByQuery task ID: {}", response.task());
 	}
 

@@ -375,5 +375,5 @@ public interface ElasticSearchService {
 	
 	public void asyncUpdateByTaxonId(Long targetId, String name, String normalizedName, 
 	        String oldName, String italicisedForm, String canonicalForm, 
-	        String position, String timestamp, Query filterQuery) throws IOException;
+	        String position, String timestamp, Query filterQuery, Query speciesQuery) throws IOException;
 }

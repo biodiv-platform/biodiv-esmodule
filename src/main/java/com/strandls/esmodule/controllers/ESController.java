@@ -905,6 +905,16 @@ public class ESController {
 			@QueryParam("italicisedForm") String italicisedForm, @QueryParam("canonicalForm") String canonicalForm,
 			@QueryParam("position") String position, @QueryParam("timestamp") String timestamp) {
 		try {
+			Query speciesQuery = BoolQuery.of(b -> b.should(
+					TermQuery.of(t -> t.field("taxonomyDefinition.id").value(FieldValue.of(taxonId)))
+							._toQuery(),
+					TermQuery.of(t -> t.field("breadCrumbs.id").value(FieldValue.of(taxonId)))
+							._toQuery(),
+					TermQuery.of(
+							t -> t.field("taxonomicNames.synonyms.id").value(FieldValue.of(taxonId)))
+							._toQuery())
+					.minimumShouldMatch("1"))._toQuery();
+			
 			Query filterQuery = BoolQuery.of(b -> b.should(
 					TermQuery.of(t -> t.field("max_voted_reco.scientific_name.keyword").value(FieldValue.of(oldName)))
 							._toQuery(),
@@ -914,8 +924,10 @@ public class ESController {
 							t -> t.field("all_reco_vote.scientific_name.taxon_detail.id").value(FieldValue.of(taxonId)))
 							._toQuery())
 					.minimumShouldMatch("1"))._toQuery();
+			
 			elasticSearchService.asyncUpdateByTaxonId(taxonId, name, normalizedName, oldName, italicisedForm,
-					canonicalForm, position, timestamp, filterQuery);
+					canonicalForm, position, timestamp, filterQuery, speciesQuery);
+			
 			return Response.status(Status.OK).entity("Async update initiated successfully").build();
 		} catch (Exception e) {
 			// Log the exception properly

@@ -1,0 +1,46 @@
+boolean updated = false;
+String newName = params.name;
+String italicisedName = params.italicised_form;
+String canonicalName = params.canonical_form;
+String normalizedName = params.normalized_name;
+String position = params.position;
+long targetId = params.targetId;
+
+if (ctx._source.taxonomyDefinition?.id == targetId) {
+    ctx._source.taxonomyDefinition.canonicalForm = canonicalName;
+    ctx._source.taxonomyDefinition.italicisedForm = italicisedName;
+    ctx._source.taxonomyDefinition.name = newName;
+    ctx._source.taxonomyDefinition.normalizedForm = normalizedName;
+    ctx._source.taxonomyDefinition.position = position;
+    updated = true;
+}
+
+List synonyms = ctx._source.taxonomicNames?.synonyms;
+if (synonyms != null) {
+    int size = synonyms.size();
+    for (int i = 0; i < size; i++) {
+        def synonym = synonyms.get(i);
+        if (synonym?.name == null) continue;
+
+        if (taxonDetail != null && synonym.id == targetId) {
+            synonym.canonicalForm = canonicalName;
+		    synonym.italicisedForm = italicisedName;
+		    synonym.name = newName;
+		    synonym.normalizedForm = normalizedName;
+		    synonym.position = position;
+            updated = true;
+        }
+    }
+}
+
+List hierarchy = ctx._source.breadCrumbs;
+if (hierarchy != null) {
+    int size = hierarchy.size();
+    for (int i = 0; i < size; i++) {
+        def entry = hierarchy.get(i);
+        if (entry?.id == targetId) {
+            entry.name = newName;
+            updated = true;
+        }
+    }
+}
