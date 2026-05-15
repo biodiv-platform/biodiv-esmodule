@@ -2391,7 +2391,10 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	    logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
 
 	    UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
-	    logger.info("UpdateByQuery task ID: {}", response.task());
+	    logger.info("UpdateByQuery Observation task ID: {}", response.task());
+	    
+	    logger.info("timestamp: {}", timestamp);
+	    logger.info("noralised name: {}", normalizedName);
 	    
 	    String painlessSpeciesScript = ESmoduleConfig.fetchFileAsString("scripts/updateSpeciesTaxonomy.painless");
 
@@ -2412,7 +2415,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	    logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
 
 	    response = client.getClient().updateByQuery(updateByQueryRequest);
-	    logger.info("UpdateByQuery task ID: {}", response.task());
+	    logger.info("UpdateByQuery Species task ID: {}", response.task());
 	}
 
 	private String sanitize(String value) {

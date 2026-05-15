@@ -22,7 +22,7 @@ if (synonyms != null) {
         def synonym = synonyms.get(i);
         if (synonym?.name == null) continue;
 
-        if (taxonDetail != null && synonym.id == targetId) {
+        if (synonym.id == targetId) {
             synonym.canonicalForm = canonicalName;
 		    synonym.italicisedForm = italicisedName;
 		    synonym.name = newName;
