@@ -2375,7 +2375,10 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		params.put("canonical_form", JsonData.of(taxonomyData.getCanonicalForm()));
 		params.put("position", JsonData.of(taxonomyData.getPosition()));
 		params.put("timestamp", JsonData.of(taxonomyData.getTimestamp()));
-		params.put("breadCrumbs", JsonData.of(taxonomyData.getBreadCrumbs()));
+		ObjectMapper mapper = new ObjectMapper();
+		String breadCrumbsJson = mapper.writeValueAsString(taxonomyData.getBreadCrumbs());
+		List<Map> breadCrumbsList = mapper.readValue(breadCrumbsJson, List.class);
+		params.put("breadCrumbs", JsonData.of(breadCrumbsList));
 		params.put("rank", JsonData.of(taxonomyData.getRank()));
 		params.put("status", JsonData.of(taxonomyData.getStatus()));
 
