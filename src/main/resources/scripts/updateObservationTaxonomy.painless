@@ -47,7 +47,7 @@ if (hierarchy != null && breadCrumbs != null) {
     int cutIndex = -1;
     for (int i = 0; i < hierarchy.size(); i++) {
         def entry = hierarchy.get(i);
-        if (entry?.taxon_id == targetTaxonId) {
+        if (entry?.taxon_id == targetId) {
             cutIndex = i;
             break;
         }
