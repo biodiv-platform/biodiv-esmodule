@@ -82,6 +82,7 @@ import com.strandls.esmodule.services.ElasticSearchService;
 
 import jakarta.inject.Inject;
 import jakarta.json.stream.JsonGenerator;
+import com.fasterxml.jackson.core.type.TypeReference;
 
 /**
  * Implementation of {@link ElasticSearchService}
@@ -2377,8 +2378,9 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		params.put("timestamp", JsonData.of(taxonomyData.getTimestamp()));
 		ObjectMapper mapper = new ObjectMapper();
 		String breadCrumbsJson = mapper.writeValueAsString(taxonomyData.getBreadCrumbs());
-		List<Map> breadCrumbsList = mapper.readValue(breadCrumbsJson, List.class);
-		params.put("breadCrumbs", JsonData.of(breadCrumbsList));
+		List<LinkedHashMap<String, Object>> breadCrumbsList = mapper.readValue(breadCrumbsJson, 
+			    mapper.getTypeFactory().constructCollectionType(List.class, LinkedHashMap.class));
+			params.put("breadCrumbs", JsonData.of(breadCrumbsList));
 		params.put("rank", JsonData.of(taxonomyData.getRank()));
 		params.put("status", JsonData.of(taxonomyData.getStatus()));
 
