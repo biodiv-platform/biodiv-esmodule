@@ -893,9 +893,9 @@ public class ESController {
 		}
 	}
 
-	@GET
+	@POST
 	@Path("asyncUpdate")
-	@Consumes(MediaType.TEXT_PLAIN)
+	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "fetch the observation uploaded freq by user", description = "Returns the maxvotedId freq")
 	@ApiResponses({
