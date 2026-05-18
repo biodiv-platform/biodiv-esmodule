@@ -38,9 +38,4 @@ public class Breadcrumb {
 	public void setTaxonId(Long taxonId) {
 		this.taxonId = taxonId;
 	}
-
-	@Override
-	public String toString() {
-		return "BreadCrumb [taxonName=" + taxonName + ", taxonRank=" + taxonRank + ", taxonId=" + taxonId + "]";
-	}
 }
