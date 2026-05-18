@@ -28,6 +28,8 @@ public class MapSearchParams {
 	 * the bounds in which the search is required
 	 */
 	private MapBoundParams mapBoundParams;
+	
+	private String searchAfter;
 
 	public MapSearchParams() {
 	}
@@ -89,11 +91,19 @@ public class MapSearchParams {
 	public void setMapBoundParams(MapBoundParams mapBoundParams) {
 		this.mapBoundParams = mapBoundParams;
 	}
+	
+	public String getSearchAfter() {
+		return searchAfter;
+	}
+
+	public void setSearchAfter(String searchAfter) {
+		this.searchAfter = searchAfter;
+	}
 
 	@Override
 	public String toString() {
 		return "MapSearchParams [from=" + from + ", limit=" + limit + ", sortOn=" + sortOn + ", sortType=" + sortType
-				+ ", mapBoundParams=" + mapBoundParams + "]";
+				+ ", mapBoundParams=" + mapBoundParams + ", searchAfter=" + searchAfter + "]";
 	}
 
 }

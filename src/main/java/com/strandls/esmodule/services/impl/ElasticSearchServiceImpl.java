@@ -70,6 +70,7 @@ import com.strandls.esmodule.models.ObservationMapInfo;
 import com.strandls.esmodule.models.ObservationNearBy;
 import com.strandls.esmodule.models.SimilarObservation;
 import com.strandls.esmodule.models.SpeciesGroup;
+import com.strandls.esmodule.models.TaxonomyUpdateData;
 import com.strandls.esmodule.models.TraitValue;
 import com.strandls.esmodule.models.Traits;
 import com.strandls.esmodule.models.UploadersInfo;
@@ -341,29 +342,33 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			Integer geoAggegationPrecision) throws IOException {
 
 		SearchRequest searchRequest = SearchRequest.of(s -> {
-		    s.index(index).trackTotalHits(t -> t.enabled(true));
+			s.index(index).trackTotalHits(t -> t.enabled(true));
 
-		    if (query != null) {
-		        s.query(query);
-		    }
+			if (query != null) {
+				s.query(query);
+			}
 
-		    if (searchParams.getFrom() != null)
-		        s.from(searchParams.getFrom());
-		    if (searchParams.getLimit() != null)
-		        s.size(searchParams.getLimit());
+			if (searchParams.getFrom() != null)
+				s.from(searchParams.getFrom());
+			if (searchParams.getLimit() != null)
+				s.size(searchParams.getLimit());
 
-		    if (searchParams.getSortOn() != null) {
-		        SortOrder order = (searchParams.getSortType() != null && MapSortType.ASC == searchParams.getSortType())
-		                ? SortOrder.Asc
-		                : SortOrder.Desc;
-		        s.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(order)));
-		    }
+			if (searchParams.getSortOn() != null) {
+				SortOrder order = (searchParams.getSortType() != null && MapSortType.ASC == searchParams.getSortType())
+						? SortOrder.Asc
+						: SortOrder.Desc;
+				s.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(order)));
+			}
 
-		    if (geoAggregationField != null) {
-		        s.aggregations("geo_agg", getGeoGridAggregationBuilder(geoAggregationField, geoAggegationPrecision));
-		    }
+			if (searchParams.getSearchAfter() != null) {
+				s.searchAfter(FieldValue.of(searchParams.getSearchAfter()));
+			}
 
-		    return s;
+			if (geoAggregationField != null) {
+				s.aggregations("geo_agg", getGeoGridAggregationBuilder(geoAggregationField, geoAggegationPrecision));
+			}
+
+			return s;
 		});
 
 		logger.info("ES Request: {}", searchRequest.toString());
@@ -2357,65 +2362,48 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		return new MapResponse(result, totalHits, null);
 	}
-	
-	public void asyncUpdateByTaxonId(Long targetId, String name, String normalizedName, 
-	        String oldName, String italicisedForm, String canonicalForm, 
-	        String position, String timestamp, Query filterQuery, Query speciesQuery) throws IOException {
 
-	    Map<String, JsonData> params = new HashMap<>();
-	    params.put("targetId",        JsonData.of(targetId));
-	    params.put("name",            JsonData.of(name));
-	    params.put("normalized_name", JsonData.of(normalizedName));
-	    params.put("old_name",        JsonData.of(oldName));
-	    params.put("italicised_form", JsonData.of(italicisedForm));
-	    params.put("canonical_form",  JsonData.of(canonicalForm));
-	    params.put("position",        JsonData.of(position));
-	    params.put("timestamp",       JsonData.of(timestamp));
+	public void asyncUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery, Query speciesQuery)
+			throws IOException {
 
-	    String painlessScript = ESmoduleConfig.fetchFileAsString("scripts/updateObservationTaxonomy.painless");
+		Map<String, JsonData> params = new HashMap<>();
+		params.put("targetId", JsonData.of(taxonomyData.getTargetId()));
+		params.put("name", JsonData.of(taxonomyData.getName()));
+		params.put("normalized_name", JsonData.of(taxonomyData.getNormalizedName()));
+		params.put("old_name", JsonData.of(taxonomyData.getOldName()));
+		params.put("italicised_form", JsonData.of(taxonomyData.getItalicisedForm()));
+		params.put("canonical_form", JsonData.of(taxonomyData.getCanonicalForm()));
+		params.put("position", JsonData.of(taxonomyData.getPosition()));
+		params.put("timestamp", JsonData.of(taxonomyData.getTimestamp()));
+		params.put("breadCrumbs", JsonData.of(taxonomyData.getBreadCrumbs()));
+		params.put("rank", JsonData.of(taxonomyData.getRank()));
+		params.put("status", JsonData.of(taxonomyData.getStatus()));
 
-	    Script script = Script.of(s -> s
-	        .source(src -> src.scriptString(painlessScript))
-	        .lang(ScriptLanguage.Painless)
-	        .params(params)
-	    );
+		String painlessScript = ESmoduleConfig.fetchFileAsString("scripts/updateObservationTaxonomy.painless");
 
-	    UpdateByQueryRequest updateByQueryRequest = UpdateByQueryRequest.of(u -> u
-	        .index("extended_observation")
-	        .conflicts(Conflicts.Proceed)
-	        .waitForCompletion(false)
-	        .script(script)
-	        .query(filterQuery)
-	    );
+		Script script = Script.of(
+				s -> s.source(src -> src.scriptString(painlessScript)).lang(ScriptLanguage.Painless).params(params));
 
-	    logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
+		UpdateByQueryRequest updateByQueryRequest = UpdateByQueryRequest.of(u -> u.index("extended_observation")
+				.conflicts(Conflicts.Proceed).waitForCompletion(false).script(script).query(filterQuery));
 
-	    UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
-	    logger.info("UpdateByQuery Observation task ID: {}", response.task());
-	    
-	    logger.info("timestamp: {}", timestamp);
-	    logger.info("noralised name: {}", normalizedName);
-	    
-	    String painlessSpeciesScript = ESmoduleConfig.fetchFileAsString("scripts/updateSpeciesTaxonomy.painless");
+		logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
 
-	    Script speciesScript = Script.of(s -> s
-	        .source(src -> src.scriptString(painlessSpeciesScript))
-	        .lang(ScriptLanguage.Painless)
-	        .params(params)
-	    );
+		UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
+		logger.info("UpdateByQuery Observation task ID: {}", response.task());
 
-	    updateByQueryRequest = UpdateByQueryRequest.of(u -> u
-	        .index("extended_species")
-	        .conflicts(Conflicts.Proceed)
-	        .waitForCompletion(false)
-	        .script(speciesScript)
-	        .query(speciesQuery)
-	    );
+		String painlessSpeciesScript = ESmoduleConfig.fetchFileAsString("scripts/updateSpeciesTaxonomy.painless");
 
-	    logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
+		Script speciesScript = Script.of(s -> s.source(src -> src.scriptString(painlessSpeciesScript))
+				.lang(ScriptLanguage.Painless).params(params));
 
-	    response = client.getClient().updateByQuery(updateByQueryRequest);
-	    logger.info("UpdateByQuery Species task ID: {}", response.task());
+		updateByQueryRequest = UpdateByQueryRequest.of(u -> u.index("extended_species").conflicts(Conflicts.Proceed)
+				.waitForCompletion(false).script(speciesScript).query(speciesQuery));
+
+		logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
+
+		response = client.getClient().updateByQuery(updateByQueryRequest);
+		logger.info("UpdateByQuery Species task ID: {}", response.task());
 	}
 
 	private String sanitize(String value) {

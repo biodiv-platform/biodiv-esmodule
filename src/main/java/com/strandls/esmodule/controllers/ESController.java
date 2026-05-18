@@ -28,6 +28,7 @@ import com.strandls.esmodule.models.MonthAggregation;
 import com.strandls.esmodule.models.ObservationInfo;
 import com.strandls.esmodule.models.ObservationLatLon;
 import com.strandls.esmodule.models.ObservationNearBy;
+import com.strandls.esmodule.models.TaxonomyUpdateData;
 import com.strandls.esmodule.models.UploadersInfo;
 import com.strandls.esmodule.models.query.MapBoolQuery;
 import com.strandls.esmodule.models.query.MapRangeQuery;
@@ -900,33 +901,29 @@ public class ESController {
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
 			@ApiResponse(responseCode = "400", description = "unable to get the result") })
-	public Response updateAsync(@QueryParam("taxonId") Long taxonId, @QueryParam("name") String name,
-			@QueryParam("normalizedName") String normalizedName, @QueryParam("oldName") String oldName,
-			@QueryParam("italicisedForm") String italicisedForm, @QueryParam("canonicalForm") String canonicalForm,
-			@QueryParam("position") String position, @QueryParam("timestamp") String timestamp) {
+	public Response updateAsync(@QueryParam("taxonomyData") TaxonomyUpdateData taxonomyData) {
 		try {
 			Query speciesQuery = BoolQuery.of(b -> b.should(
-					TermQuery.of(t -> t.field("taxonomyDefinition.id").value(FieldValue.of(taxonId)))
+					TermQuery.of(t -> t.field("taxonomyDefinition.id").value(FieldValue.of(taxonomyData.getTargetId())))
 							._toQuery(),
-					TermQuery.of(t -> t.field("breadCrumbs.id").value(FieldValue.of(taxonId)))
+					TermQuery.of(t -> t.field("breadCrumbs.id").value(FieldValue.of(taxonomyData.getTargetId())))
 							._toQuery(),
 					TermQuery.of(
-							t -> t.field("taxonomicNames.synonyms.id").value(FieldValue.of(taxonId)))
+							t -> t.field("taxonomicNames.synonyms.id").value(FieldValue.of(taxonomyData.getTargetId())))
 							._toQuery())
 					.minimumShouldMatch("1"))._toQuery();
 			
 			Query filterQuery = BoolQuery.of(b -> b.should(
-					TermQuery.of(t -> t.field("max_voted_reco.scientific_name.keyword").value(FieldValue.of(oldName)))
+					TermQuery.of(t -> t.field("max_voted_reco.scientific_name.keyword").value(FieldValue.of(taxonomyData.getOldName())))
 							._toQuery(),
-					TermQuery.of(t -> t.field("max_voted_reco.hierarchy.taxon_id").value(FieldValue.of(taxonId)))
+					TermQuery.of(t -> t.field("max_voted_reco.hierarchy.taxon_id").value(FieldValue.of(taxonomyData.getTargetId())))
 							._toQuery(),
 					TermQuery.of(
-							t -> t.field("all_reco_vote.scientific_name.taxon_detail.id").value(FieldValue.of(taxonId)))
+							t -> t.field("all_reco_vote.scientific_name.taxon_detail.id").value(FieldValue.of(taxonomyData.getTargetId())))
 							._toQuery())
 					.minimumShouldMatch("1"))._toQuery();
 			
-			elasticSearchService.asyncUpdateByTaxonId(taxonId, name, normalizedName, oldName, italicisedForm,
-					canonicalForm, position, timestamp, filterQuery, speciesQuery);
+			elasticSearchService.asyncUpdateByTaxonId(taxonomyData, filterQuery, speciesQuery);
 			
 			return Response.status(Status.OK).entity("Async update initiated successfully").build();
 		} catch (Exception e) {

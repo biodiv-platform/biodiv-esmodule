@@ -6,10 +6,15 @@ String normalizedName = params.normalized_name;
 String oldName = params.old_name;
 String position = params.position;
 long targetId = params.targetId;
+String status = params.status;
+String rank = params.rank;
+List breadCrumbs = params.breadCrumbs;
 
 if (ctx._source.max_voted_reco?.scientific_name == oldName) {
     ctx._source.max_voted_reco.scientific_name = normalizedName;
     ctx._source.max_voted_reco.italicised_form = italicisedName;
+    ctx._source.max_voted_reco.rank = rank;
+    ctx._source.max_voted_reco.taxonstatus = status;
     updated = true;
 }
 
@@ -30,20 +35,31 @@ if (recoVotes != null) {
             taxonDetail.italicised_form = italicisedName;
             taxonDetail.canonical_form  = canonicalName;
             taxonDetail.position        = position;
+            taxonDetail.status          = status;
+            taxonDetail.rank            = rank;
             updated = true;
         }
     }
 }
 
 List hierarchy = ctx._source.max_voted_reco?.hierarchy;
-if (hierarchy != null) {
-    int size = hierarchy.size();
-    for (int i = 0; i < size; i++) {
+if (hierarchy != null && breadCrumbs != null) {
+    int cutIndex = -1;
+    for (int i = 0; i < hierarchy.size(); i++) {
         def entry = hierarchy.get(i);
-        if (entry?.taxon_id == targetId) {
-            entry.normalized_name = normalizedName;
-            updated = true;
+        if (entry?.taxon_id == targetTaxonId) {
+            cutIndex = i;
+            break;
         }
+    }
+    
+    if (cutIndex != -1) {
+        List trimmed = new ArrayList();
+        for (int i = cutIndex + 1; i < hierarchy.size(); i++) {
+            breadCrumbs.add(hierarchy.get(i));
+        }
+        
+        ctx._source.max_voted_reco.hierarchy = breadCrumbs;
     }
 }
 

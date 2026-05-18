@@ -20,6 +20,7 @@ import com.strandls.esmodule.models.MonthAggregation;
 import com.strandls.esmodule.models.ObservationInfo;
 import com.strandls.esmodule.models.ObservationLatLon;
 import com.strandls.esmodule.models.ObservationNearBy;
+import com.strandls.esmodule.models.TaxonomyUpdateData;
 import com.strandls.esmodule.models.UploadersInfo;
 import com.strandls.esmodule.models.query.MapBoolQuery;
 import com.strandls.esmodule.models.query.MapQuery;
@@ -373,7 +374,5 @@ public interface ElasticSearchService {
 
 	public MapResponse autocompleteSpeciesContributors(String index, String type, String name) throws IOException;
 	
-	public void asyncUpdateByTaxonId(Long targetId, String name, String normalizedName, 
-	        String oldName, String italicisedForm, String canonicalForm, 
-	        String position, String timestamp, Query filterQuery, Query speciesQuery) throws IOException;
+	public void asyncUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery, Query speciesQuery) throws IOException;
 }

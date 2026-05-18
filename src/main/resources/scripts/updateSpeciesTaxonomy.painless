@@ -5,6 +5,9 @@ String canonicalName = params.canonical_form;
 String normalizedName = params.normalized_name;
 String position = params.position;
 long targetId = params.targetId;
+String status = params.status;
+String rank = params.rank;
+List breadCrumbs = params.breadCrumbs;
 
 if (ctx._source.taxonomyDefinition?.id == targetId) {
     ctx._source.taxonomyDefinition.canonicalForm = canonicalName;
@@ -12,6 +15,8 @@ if (ctx._source.taxonomyDefinition?.id == targetId) {
     ctx._source.taxonomyDefinition.name = newName;
     ctx._source.taxonomyDefinition.normalizedForm = normalizedName;
     ctx._source.taxonomyDefinition.position = position;
+    ctx._source.taxonomyDefinition.rank = rank;
+    ctx._source.taxonomyDefinition.status = status;
     updated = true;
 }
 
@@ -28,6 +33,8 @@ if (synonyms != null) {
 		    synonym.name = newName;
 		    synonym.normalizedForm = normalizedName;
 		    synonym.position = position;
+		    synonym.status = status;
+		    synonym.rank = rank;
             updated = true;
         }
     }
