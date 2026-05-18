@@ -901,7 +901,7 @@ public class ESController {
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
 			@ApiResponse(responseCode = "400", description = "unable to get the result") })
-	public Response updateAsync(@QueryParam("taxonomyData") TaxonomyUpdateData taxonomyData) {
+	public Response updateAsync(TaxonomyUpdateData taxonomyData) {
 		try {
 			Query speciesQuery = BoolQuery.of(b -> b.should(
 					TermQuery.of(t -> t.field("taxonomyDefinition.id").value(FieldValue.of(taxonomyData.getTargetId())))
