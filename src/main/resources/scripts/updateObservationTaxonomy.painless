@@ -54,12 +54,19 @@ if (hierarchy != null && breadCrumbs != null) {
     }
     
     if (cutIndex != -1) {
-        List trimmed = new ArrayList();
-        for (int i = cutIndex + 1; i < hierarchy.size(); i++) {
-            breadCrumbs.add(hierarchy.get(i));
-        }
-        
-        ctx._source.max_voted_reco.hierarchy = breadCrumbs;
+       List trimmed = new ArrayList();
+       for (int i = 0; i < breadCrumbs.size(); i++) {
+            def crumb = breadCrumbs.get(i);
+            def entry = new HashMap();
+            entry.put("taxon_id", crumb.get("taxon_id"));
+            entry.put("normalized_name", crumb.get("taxon_name"));
+            entry.put("rank", crumb.get("taxon_rank"));
+            trimmed.add(entry);
+       }
+       for (int i = cutIndex + 1; i < hierarchy.size(); i++) {
+            trimmed.add(hierarchy.get(i));
+       }
+       ctx._source.max_voted_reco.hierarchy = trimmed;
     }
 }
 
