@@ -1,9 +1,16 @@
 package com.strandls.esmodule.models;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class Breadcrumb {
 
+	@JsonProperty("taxon_name")
 	private String taxonName;
+
+	@JsonProperty("taxon_rank")
 	private String taxonRank;
+
+	@JsonProperty("taxon_id")
 	private Long taxonId;
 
 	public Breadcrumb() {
