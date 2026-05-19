@@ -30,6 +30,9 @@ if (recoVotes != null) {
         def taxonDetail = sciName.taxon_detail;
         if (taxonDetail != null && taxonDetail.id == targetId) {
             sciName.name                = normalizedName;
+            if (taxonDetail.status != status && status == "ACCEPTED") {
+            	sciName.accepted_name_id = targetId;
+            }
             taxonDetail.name            = newName;
             taxonDetail.scientific_name = normalizedName;
             taxonDetail.italicised_form = italicisedName;
