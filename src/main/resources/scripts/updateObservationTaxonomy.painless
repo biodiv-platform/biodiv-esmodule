@@ -76,7 +76,7 @@ if (hierarchy != null && breadCrumbs != null) {
        ctx._source.max_voted_reco.hierarchy = trimmed;
        updated = true;
     }
-} else if (hierarchy == null && breadCrumbs != null) {
+} else if (hierarchy == null && breadCrumbs != null && ctx._source.max_voted_reco?.scientific_name == oldName) {
     List trimmed = new ArrayList();
     for (int i = 0; i < breadCrumbs.size(); i++) {
         def crumb = breadCrumbs.get(i);
