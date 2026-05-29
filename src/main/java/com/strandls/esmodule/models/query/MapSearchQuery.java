@@ -28,6 +28,8 @@ public class MapSearchQuery {
 	private List<MapOrMatchPhraseQuery> orMatchPhraseQueries;
 
 	private MapSearchParams searchParams;
+	
+	private String pathHierarchy;
 
 	public MapSearchQuery() {
 	}
@@ -118,6 +120,9 @@ public class MapSearchQuery {
 	public void setSearchParams(MapSearchParams searchParams) {
 		this.searchParams = searchParams;
 	}
+	
+	public String getPathHierarchy() { return pathHierarchy; }
+	public void setPathHierarchy(String pathHierarchy) { this.pathHierarchy = pathHierarchy; }
 
 	@Override
 	public String toString() {

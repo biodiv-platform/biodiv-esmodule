@@ -473,6 +473,17 @@ public class ElasticSearchQueryUtil {
 		buildExistsQueries(searchQuery.getAndExistQueries(), masterBoolQuery);
 		buildMatchPhraseQueries(searchQuery.getAndMatchPhraseQueries(), searchQuery.getOrMatchPhraseQueries(),
 				masterBoolQuery);
+
+		if (searchQuery.getPathHierarchy() != null && !searchQuery.getPathHierarchy().isEmpty()) {
+
+			Query pathMatchQuery = Query
+					.of(q -> q.matchPhrase(m -> m.field("path.hierarchy").query(searchQuery.getPathHierarchy())));
+
+			Query pathNullQuery = Query.of(q -> q.bool(b -> b.mustNot(mn -> mn.exists(e -> e.field("path")))));
+
+			masterBoolQuery
+					.must(Query.of(q -> q.bool(b -> b.should(pathMatchQuery, pathNullQuery).minimumShouldMatch("1"))));
+		}
 		return masterBoolQuery;
 	}
 

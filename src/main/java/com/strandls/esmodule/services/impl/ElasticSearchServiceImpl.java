@@ -25,6 +25,7 @@ import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 // ES 9 Client and Core
@@ -354,14 +355,24 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			if (searchParams.getLimit() != null)
 				s.size(searchParams.getLimit());
 
-			if (searchParams.getSortOn() != null) {
+			if (searchParams.getSortOnList() != null && !searchParams.getSortOnList().isEmpty()) {
 				SortOrder order = (searchParams.getSortType() != null && MapSortType.ASC == searchParams.getSortType())
 						? SortOrder.Asc
 						: SortOrder.Desc;
-				s.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(order)));
+				for (String sortField : searchParams.getSortOnList()) {
+					s.sort(so -> so.field(f -> f.field(sortField).order(order).missing("_last")));
+				}
+			} else if (searchParams.getSortOn() != null) {
+				SortOrder order = (searchParams.getSortType() != null && MapSortType.ASC == searchParams.getSortType())
+						? SortOrder.Asc
+						: SortOrder.Desc;
+				s.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(order).missing("_last")));
 			}
 
-			if (searchParams.getSearchAfter() != null) {
+			if (searchParams.getSearchAfterList() != null && !searchParams.getSearchAfterList().isEmpty()) {
+				s.searchAfter(
+						searchParams.getSearchAfterList().stream().map(FieldValue::of).collect(Collectors.toList()));
+			} else if (searchParams.getSearchAfter() != null) {
 				s.searchAfter(FieldValue.of(searchParams.getSearchAfter()));
 			}
 
@@ -2368,19 +2379,28 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			throws IOException {
 
 		Map<String, JsonData> params = new HashMap<>();
-		params.put("targetId", JsonData.of(taxonomyData.getTargetId()));
-		params.put("name", JsonData.of(taxonomyData.getName()));
-		params.put("normalized_name", JsonData.of(taxonomyData.getNormalizedName()));
-		params.put("old_name", JsonData.of(taxonomyData.getOldName()));
-		params.put("italicised_form", JsonData.of(taxonomyData.getItalicisedForm()));
-		params.put("canonical_form", JsonData.of(taxonomyData.getCanonicalForm()));
-		params.put("position", JsonData.of(taxonomyData.getPosition()));
-		params.put("timestamp", JsonData.of(taxonomyData.getTimestamp()));
+		params.put("targetId", toJsonData(taxonomyData.getTargetId()));
+		params.put("name", toJsonData(taxonomyData.getName()));
+		params.put("normalized_name", toJsonData(taxonomyData.getNormalizedName()));
+		params.put("old_name", toJsonData(taxonomyData.getOldName()));
+		params.put("italicised_form", toJsonData(taxonomyData.getItalicisedForm()));
+		params.put("canonical_form", toJsonData(taxonomyData.getCanonicalForm()));
+		params.put("position", toJsonData(taxonomyData.getPosition()));
+		params.put("timestamp", toJsonData(taxonomyData.getTimestamp()));
+		params.put("rank", toJsonData(taxonomyData.getRank()));
+		params.put("status", toJsonData(taxonomyData.getStatus()));
+		params.put("newId", toJsonData(taxonomyData.getNewId()));
+
+		// breadCrumbs and transferSynonymIds
 		ObjectMapper mapper = new ObjectMapper();
-		String breadCrumbsJson = mapper.writeValueAsString(taxonomyData.getBreadCrumbs());
+		String breadCrumbsJson = taxonomyData.getBreadCrumbs() != null
+				? mapper.writeValueAsString(taxonomyData.getBreadCrumbs())
+				: "null";
+		String transferSynonymIdsJson = taxonomyData.getTransferSynonymIds() != null
+				? mapper.writeValueAsString(taxonomyData.getTransferSynonymIds())
+				: "null";
 		params.put("breadCrumbs", JsonData.fromJson(breadCrumbsJson));
-		params.put("rank", JsonData.of(taxonomyData.getRank()));
-		params.put("status", JsonData.of(taxonomyData.getStatus()));
+		params.put("transferSynonymIds", JsonData.fromJson(transferSynonymIdsJson));
 
 		String painlessScript = ESmoduleConfig.fetchFileAsString("scripts/updateObservationTaxonomy.painless");
 
@@ -2411,6 +2431,13 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 	private String sanitize(String value) {
 		return value == null ? null : value.replaceAll("[\n\r\t]", "_");
+	}
+
+	private JsonData toJsonData(Object value) {
+		if (value == null) {
+			return JsonData.of(NullNode.getInstance());
+		}
+		return JsonData.of(value);
 	}
 
 }

@@ -9,6 +9,8 @@ long targetId = params.targetId;
 String status = params.status;
 String rank = params.rank;
 List breadCrumbs = params.breadCrumbs;
+List transferSynonymIds = params.transferSynonymIds;
+long newId = params.newId;
 
 if (ctx._source.max_voted_reco?.scientific_name == oldName) {
     ctx._source.max_voted_reco.scientific_name = normalizedName;
@@ -30,8 +32,12 @@ if (recoVotes != null) {
         def taxonDetail = sciName.taxon_detail;
         if (taxonDetail != null && taxonDetail.id == targetId) {
             sciName.name                = normalizedName;
-            if (taxonDetail.status != status && status == "ACCEPTED") {
-            	sciName.accepted_name_id = targetId;
+            if (taxonDetail.status != status) {
+            	if (status == "ACCEPTED"){
+            		sciName.accepted_name_id = targetId;
+            	} else {
+            		sciName.accepted_name_id = newId;
+            	}
             }
             taxonDetail.name            = newName;
             taxonDetail.scientific_name = normalizedName;
@@ -41,6 +47,9 @@ if (recoVotes != null) {
             taxonDetail.status          = status;
             taxonDetail.rank            = rank;
             updated = true;
+        } else if (taxonDetail !=null && transferSynonymIds.contains(taxonDetail.id)){
+        	sciName.accepted_name_id = newId;
+        	updated = true;
         }
     }
 }
@@ -89,7 +98,11 @@ if (hierarchy != null && breadCrumbs != null) {
     ctx._source.max_voted_reco.hierarchy = trimmed;
     updated = true;
 } else if (hierarchy != null && breadCrumbs == null) {
-    if (oldName!=normalizedName){
+	if (ctx._source.max_voted_reco.taxonstatus != status && status == "SYNONYM") {
+    	ctx._source.max_voted_reco.hierarchy = null;
+    	updated = true;
+    }
+    else if (oldName!=normalizedName){
     	int size = hierarchy.size();
     	for (int i = 0; i < size; i++) {
         	def entry = hierarchy.get(i);
@@ -98,7 +111,7 @@ if (hierarchy != null && breadCrumbs != null) {
 	            updated = true;
 	        }
         }
-    }
+     }
 }
 
 if (updated) {

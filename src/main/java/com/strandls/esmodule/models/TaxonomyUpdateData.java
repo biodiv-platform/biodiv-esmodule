@@ -15,13 +15,15 @@ public class TaxonomyUpdateData {
 	private List<Breadcrumb> breadCrumbs;
 	private String rank;
 	private String status;
+	private List<Long> transferSynonymIds;
+	private Long newId;
 
 	public TaxonomyUpdateData() {
 	}
 
 	public TaxonomyUpdateData(Long targetId, String name, String normalizedName, String oldName, String italicisedForm,
 			String canonicalForm, String position, String timestamp, List<Breadcrumb> breadCrumbs, String rank,
-			String status) {
+			String status, List<Long> transferSynonymIds, Long newId) {
 		this.targetId = targetId;
 		this.name = name;
 		this.normalizedName = normalizedName;
@@ -33,6 +35,8 @@ public class TaxonomyUpdateData {
 		this.breadCrumbs = breadCrumbs;
 		this.rank = rank;
 		this.status = status;
+		this.transferSynonymIds = transferSynonymIds;
+		this.newId = newId;
 	}
 
 	public Long getTargetId() {
@@ -121,5 +125,21 @@ public class TaxonomyUpdateData {
 
 	public void setStatus(String status) {
 		this.status = status;
+	}
+	
+	public List<Long> getTransferSynonymIds(){
+		return transferSynonymIds;
+	}
+	
+	public void setTransferSynonymIds(List<Long> transferSynonymIds) {
+		this.transferSynonymIds = transferSynonymIds;
+	}
+	
+	public Long getNewId() {
+		return newId;
+	}
+	
+	public void setNewId(Long newId) {
+		this.newId = newId;
 	}
 }
