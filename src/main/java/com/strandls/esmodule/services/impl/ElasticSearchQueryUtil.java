@@ -476,13 +476,24 @@ public class ElasticSearchQueryUtil {
 
 		if (searchQuery.getPathHierarchy() != null && !searchQuery.getPathHierarchy().isEmpty()) {
 
+		    // accepted taxa by path.hierarchy
 			Query pathMatchQuery = Query
 					.of(q -> q.matchPhrase(m -> m.field("path.hierarchy").query(searchQuery.getPathHierarchy())));
 
-			Query pathNullQuery = Query.of(q -> q.bool(b -> b.mustNot(mn -> mn.exists(e -> e.field("path")))));
+		    masterBoolQuery.should(pathMatchQuery);
 
-			masterBoolQuery
-					.must(Query.of(q -> q.bool(b -> b.should(pathMatchQuery, pathNullQuery).minimumShouldMatch("1"))));
+		    // synonyms by tree_sort prefix
+		    if (searchQuery.getTreeSortPrefix() != null && !searchQuery.getTreeSortPrefix().isEmpty()) {
+		        Query treeSortPrefixQuery = Query.of(q -> q
+		            .prefix(p -> p
+		                .field("tree_sort")
+		                .value(searchQuery.getTreeSortPrefix())
+		            )
+		        );
+		        masterBoolQuery.should(treeSortPrefixQuery);
+		    }
+
+		    masterBoolQuery.minimumShouldMatch("1");
 		}
 		return masterBoolQuery;
 	}
