@@ -960,8 +960,6 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		}, Void.class);
 
 		AggregationResponse result = new AggregationResponse();
-
-		// FIX 1: Change to LinkedHashMap to PRESERVE CHRONOLOGICAL ORDER
 		LinkedHashMap<Object, Long> groupAggregation = new LinkedHashMap<>();
 
 		if (response.aggregations() == null) {
@@ -972,7 +970,26 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		for (Map.Entry<String, Aggregate> entry : response.aggregations().entrySet()) {
 			Aggregate agg = entry.getValue();
 
-			if (filter.split("\\|")[0].equals("taxon_path")) {
+			if (filter.contains("nested") && agg.isNested()) {
+				NestedAggregate nestedData = agg.nested();
+				String innerTermsKey = filter.replace("nested.", "");
+
+				Aggregate innerTermsAgg = nestedData.aggregations().get(innerTermsKey);
+
+				if (innerTermsAgg != null) {
+					if (innerTermsAgg.isSterms()) {
+						for (StringTermsBucket bucket : innerTermsAgg.sterms().buckets().array()) {
+							groupAggregation.put(bucket.key().stringValue(), bucket.docCount());
+						}
+					} else if (innerTermsAgg.isLterms()) {
+						for (LongTermsBucket bucket : innerTermsAgg.lterms().buckets().array()) {
+							groupAggregation.put(bucket.key(), bucket.docCount());
+						}
+					}
+				}
+			}
+
+			else if (filter.split("\\|")[0].equals("taxon_path")) {
 				if (agg.isSterms()) {
 					for (StringTermsBucket bucket : agg.sterms().buckets().array()) {
 						Aggregate subAgg = bucket.aggregations().get("raw_name");
@@ -986,7 +1003,6 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				}
 			}
 
-			// FIX 2: Check for Traits FIRST to avoid falling into generic isSterms()
 			else if (filter.equals(Constants.GROUP_BY_TRAITS) && agg.isSterms()) {
 				for (StringTermsBucket bucket : agg.sterms().buckets().array()) {
 					String traitKey = bucket.key().stringValue();
@@ -996,22 +1012,18 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 						Map<String, Long> monthSumDays = new HashMap<>();
 						for (DateHistogramBucket dateBucket : subAgg.dateHistogram().buckets().array()) {
 							String dateStr = dateBucket.keyAsString();
-							// Extracts 'Jan' from '2026-Jan'
 							String monthName = dateStr.contains("-") ? dateStr.split("-")[1] : dateStr;
 							monthSumDays.put(monthName,
 									monthSumDays.getOrDefault(monthName, 0L) + dateBucket.docCount());
 						}
 
-						// Force insertion in Jan, Feb, Mar... order
 						for (String month : months) {
 							String compositeKey = traitKey + "_" + month;
 							groupAggregation.put(compositeKey, monthSumDays.getOrDefault(month, 0L));
 						}
 					}
 				}
-			}
-			// 3. Handle Min/Max Date (via Stats)
-			else if (agg.isStats()) {
+			} else if (agg.isStats()) {
 				StatsAggregate stats = agg.stats();
 				if (stats.min() != null && stats.min() > 0) {
 					String minYear = java.time.Instant.ofEpochMilli(stats.min().longValue())
@@ -1023,27 +1035,19 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 							.atZone(java.time.ZoneId.of("UTC")).getYear() + "";
 					groupAggregation.put(maxYear, 0L);
 				}
-			}
-			// 4. Standard Terms
-			else if (agg.isSterms()) {
+			} else if (agg.isSterms()) {
 				for (StringTermsBucket bucket : agg.sterms().buckets().array()) {
 					groupAggregation.put(bucket.key().stringValue(), bucket.docCount());
 				}
-			}
-			// 5. Standard Long Terms
-			else if (agg.isLterms()) {
+			} else if (agg.isLterms()) {
 				for (LongTermsBucket bucket : agg.lterms().buckets().array()) {
 					groupAggregation.put(bucket.key(), bucket.docCount());
 				}
-			}
-			// 6. Standard Date Histogram
-			else if (agg.isDateHistogram()) {
+			} else if (agg.isDateHistogram()) {
 				for (DateHistogramBucket bucket : agg.dateHistogram().buckets().array()) {
 					groupAggregation.put(bucket.keyAsString(), bucket.docCount());
 				}
-			}
-			// 7. Filter/Missing
-			else if (agg.isFilter()) {
+			} else if (agg.isFilter()) {
 				groupAggregation.put(Constants.AVAILABLE, agg.filter().docCount());
 			} else if (agg.isMissing()) {
 				groupAggregation.put("missing", agg.missing().docCount());
