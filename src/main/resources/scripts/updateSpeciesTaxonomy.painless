@@ -10,14 +10,25 @@ String rank = params.rank;
 List breadCrumbs = params.breadCrumbs;
 
 if (ctx._source.taxonomyDefinition?.id == targetId) {
-    ctx._source.taxonomyDefinition.canonicalForm = canonicalName;
-    ctx._source.taxonomyDefinition.italicisedForm = italicisedName;
-    ctx._source.taxonomyDefinition.name = newName;
-    ctx._source.taxonomyDefinition.normalizedForm = normalizedName;
-    ctx._source.taxonomyDefinition.position = position;
-    ctx._source.taxonomyDefinition.rank = rank;
-    ctx._source.taxonomyDefinition.status = status;
-    updated = true;
+	if (newName!=null){
+	    ctx._source.taxonomyDefinition.canonicalForm = canonicalName;
+	    ctx._source.taxonomyDefinition.italicisedForm = italicisedName;
+	    ctx._source.taxonomyDefinition.name = newName;
+	    ctx._source.taxonomyDefinition.normalizedForm = normalizedName;
+	    updated = true;
+    }
+    if (position!=null){
+    	ctx._source.taxonomyDefinition.position = position;
+    	updated = true;
+    }
+    if (rank!=null){
+    	ctx._source.taxonomyDefinition.rank = rank;
+    	updated = true;
+    }
+    if (status!=null){
+    	ctx._source.taxonomyDefinition.status = status;
+    	updated = true;
+    }
 }
 
 List synonyms = ctx._source.taxonomicNames?.synonyms;
@@ -32,14 +43,25 @@ if (synonyms != null) {
         	if (synonym.status != status && status == "ACCEPTED") {
         		synonym_index = i;
         	}else{
-	            synonym.canonicalForm = canonicalName;
-			    synonym.italicisedForm = italicisedName;
-			    synonym.name = newName;
-			    synonym.normalizedForm = normalizedName;
-			    synonym.position = position;
-			    synonym.status = status;
-			    synonym.rank = rank;
-	            updated = true;
+        		if (newName!=null){
+		            synonym.canonicalForm = canonicalName;
+				    synonym.italicisedForm = italicisedName;
+				    synonym.name = newName;
+				    synonym.normalizedForm = normalizedName;
+				    updated = true;
+			    }
+			    if (position!=null){
+			    	synonym.position = position;
+			    	updated = true;
+			    }
+			    if (status!=null){
+			    	synonym.status = status;
+			    	updated = true;
+			    }
+			    if (rank!=null){
+			    	synonym.rank = rank;
+			    	updated = true;
+			    }
 	        } 
         }
     }
@@ -50,7 +72,7 @@ if (synonyms != null) {
 }
 
 List hierarchy = ctx._source.breadCrumbs;
-if (hierarchy != null && breadCrumbs != null) {
+if (hierarchy != null && breadCrumbs != null && ctx._source.taxonomyDefinition?.id == targetId) {
 	if (taxonDetail.status != status && status == "ACCEPTED") {
 		List trimmed = new ArrayList();
 	    for (int i = 0; i < breadCrumbs.size(); i++) {
@@ -94,8 +116,8 @@ if (hierarchy != null && breadCrumbs != null) {
 	       updated = true;
        }
     }
-} else if (hierarchy != null && breadCrumbs == null) {
-	if (oldName!=normalizedName){
+} else if (hierarchy != null && breadCrumbs == null && ctx._source.taxonomyDefinition?.id == targetId) {
+	if (newName!=null){
     	int size = hierarchy.size();
 	    for (int i = 0; i < size; i++) {
 	        def entry = hierarchy.get(i);

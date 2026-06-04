@@ -916,29 +916,25 @@ public class ESController {
 							t -> t.field("taxonomicNames.synonyms.id").value(FieldValue.of(taxonomyData.getTargetId())))
 							._toQuery())
 					.minimumShouldMatch("1"))._toQuery();
-			List<FieldValue> targetIds = Stream.concat(
-				    Stream.of(FieldValue.of(taxonomyData.getTargetId())),
-				    (taxonomyData.getTransferSynonymIds() != null 
-				        ? taxonomyData.getTransferSynonymIds().stream() 
-				        : Stream.empty())
-				        .map(FieldValue::of))
-				    .distinct()
-				    .collect(Collectors.toList());
-			Query filterQuery = BoolQuery.of(b -> b.should(
-					TermQuery.of(t -> t.field("max_voted_reco.scientific_name.keyword").value(FieldValue.of(taxonomyData.getOldName())))
-							._toQuery(),
-					TermsQuery.of(t -> t
-							        .field("max_voted_reco.hierarchy.taxon_id")
-							        .terms(TermsQueryField.of(f -> f.value(targetIds))))
-							        ._toQuery(),
-					TermsQuery.of(t -> t
-									        .field("all_reco_vote.scientific_name.taxon_detail.id")
-									        .terms(TermsQueryField.of(f -> f.value(targetIds))))
-									        ._toQuery())
-					.minimumShouldMatch("1"))._toQuery();
-			
+			List<FieldValue> targetIds = Stream.concat(Stream.of(FieldValue.of(taxonomyData.getTargetId())),
+					Stream.concat(
+							taxonomyData.getTransferSynonymIds() != null
+									? taxonomyData.getTransferSynonymIds().stream().map(FieldValue::of)
+									: Stream.empty(),
+							taxonomyData.getBulkIds() != null ? taxonomyData.getBulkIds().stream().map(FieldValue::of)
+									: Stream.empty()))
+					.distinct().collect(Collectors.toList());
+			Query filterQuery = BoolQuery
+					.of(b -> b
+							.should(TermsQuery.of(t -> t.field("max_voted_reco.hierarchy.taxon_id")
+									.terms(TermsQueryField.of(f -> f.value(targetIds))))._toQuery(),
+									TermsQuery.of(t -> t.field("all_reco_vote.scientific_name.taxon_detail.id")
+											.terms(TermsQueryField.of(f -> f.value(targetIds))))._toQuery())
+							.minimumShouldMatch("1"))
+					._toQuery();
+
 			elasticSearchService.asyncUpdateByTaxonId(taxonomyData, filterQuery, speciesQuery);
-			
+
 			return Response.status(Status.OK).entity("Async update initiated successfully").build();
 		} catch (Exception e) {
 			// Log the exception properly

@@ -2399,8 +2399,16 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String transferSynonymIdsJson = taxonomyData.getTransferSynonymIds() != null
 				? mapper.writeValueAsString(taxonomyData.getTransferSynonymIds())
 				: "null";
+		String bulkIdsJson = taxonomyData.getBulkIds() != null
+				? mapper.writeValueAsString(taxonomyData.getBulkIds())
+				: "null";
 		params.put("breadCrumbs", JsonData.fromJson(breadCrumbsJson));
 		params.put("transferSynonymIds", JsonData.fromJson(transferSynonymIdsJson));
+		params.put("bulkIds", JsonData.fromJson(bulkIdsJson));
+		String commonNamesJson = taxonomyData.getCommonNames() != null
+				? mapper.writeValueAsString(taxonomyData.getCommonNames())
+				: "null";
+		params.put("commonNames", JsonData.fromJson(commonNamesJson));
 
 		String painlessScript = ESmoduleConfig.fetchFileAsString("scripts/updateObservationTaxonomy.painless");
 

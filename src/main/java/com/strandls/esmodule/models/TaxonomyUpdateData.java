@@ -16,14 +16,16 @@ public class TaxonomyUpdateData {
 	private String rank;
 	private String status;
 	private List<Long> transferSynonymIds;
+	private List<Object> commonNames;
 	private Long newId;
+	private List<Long> bulkIds;
 
 	public TaxonomyUpdateData() {
 	}
 
 	public TaxonomyUpdateData(Long targetId, String name, String normalizedName, String oldName, String italicisedForm,
 			String canonicalForm, String position, String timestamp, List<Breadcrumb> breadCrumbs, String rank,
-			String status, List<Long> transferSynonymIds, Long newId) {
+			String status, List<Long> transferSynonymIds, Long newId, List<Object> commonNames, List<Long> bulkIds) {
 		this.targetId = targetId;
 		this.name = name;
 		this.normalizedName = normalizedName;
@@ -37,6 +39,8 @@ public class TaxonomyUpdateData {
 		this.status = status;
 		this.transferSynonymIds = transferSynonymIds;
 		this.newId = newId;
+		this.commonNames = commonNames;
+		this.bulkIds = bulkIds;
 	}
 
 	public Long getTargetId() {
@@ -141,5 +145,21 @@ public class TaxonomyUpdateData {
 	
 	public void setNewId(Long newId) {
 		this.newId = newId;
+	}
+	
+	public List<Object> getCommonNames(){
+		return commonNames;
+	}
+	
+	public void setCommonNames(List<Object> commonNames) {
+		this.commonNames = commonNames;
+	}
+	
+	public List<Long> getBulkIds(){
+		return bulkIds;
+	}
+	
+	public void setBulkIds(List<Long> bulkIds) {
+		this.bulkIds = bulkIds;
 	}
 }
