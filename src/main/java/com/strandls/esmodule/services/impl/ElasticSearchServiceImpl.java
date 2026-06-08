@@ -1375,10 +1375,13 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String normalizedField = normalizeAutocompleteField(field);
 
 		try {
-			SearchResponse<Map> searchResponse = client.getClient()
-					.search(s -> s.index(index).size(100).source(
-							src -> src.filter(f -> f.excludes(Arrays.asList(Constants.TIMESTAMP, Constants.VERSION))))
-							.query(q -> q.matchPhrase(m -> m.field(normalizedField).query(text))), Map.class);
+			SearchResponse<Map> searchResponse = client
+					.getClient().search(
+							s -> s.index(index).size(100)
+									.source(src -> src.filter(
+											f -> f.excludes(Arrays.asList(Constants.TIMESTAMP, Constants.VERSION))))
+									.query(q -> q.matchPhrasePrefix(m -> m.field(normalizedField).query(text))),
+							Map.class);
 
 			return mapSearchHits(searchResponse, classMapped);
 
