@@ -2380,6 +2380,11 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		Map<String, JsonData> params = new HashMap<>();
 		params.put("targetId", toJsonData(taxonomyData.getTargetId()));
+		params.put("recoId", toJsonData(taxonomyData.getRecoId()));
+		params.put("speciesId", toJsonData(taxonomyData.getSpeciesId()));
+		params.put("scientificName", toJsonData(taxonomyData.getScientificName()));
+		params.put("title", toJsonData(taxonomyData.getTitle()));
+		params.put("binomialForm", toJsonData(taxonomyData.getBinomialForm()));
 		params.put("name", toJsonData(taxonomyData.getName()));
 		params.put("normalized_name", toJsonData(taxonomyData.getNormalizedName()));
 		params.put("old_name", toJsonData(taxonomyData.getOldName()));
@@ -2402,9 +2407,21 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String bulkIdsJson = taxonomyData.getBulkIds() != null
 				? mapper.writeValueAsString(taxonomyData.getBulkIds())
 				: "null";
+		String deleteRecoIdsJson = taxonomyData.getDeleteRecoIds() != null
+				? mapper.writeValueAsString(taxonomyData.getDeleteRecoIds())
+				: "null";
+		String transferRecoIdsJson = taxonomyData.getTransferRecoIds() != null
+				? mapper.writeValueAsString(taxonomyData.getTransferRecoIds())
+				: "null";
+		String deleteSpeciesIdsJson = taxonomyData.getDeleteSpeciesIds() != null
+				? mapper.writeValueAsString(taxonomyData.getDeleteSpeciesIds())
+				: "null";
 		params.put("breadCrumbs", JsonData.fromJson(breadCrumbsJson));
 		params.put("transferSynonymIds", JsonData.fromJson(transferSynonymIdsJson));
 		params.put("bulkIds", JsonData.fromJson(bulkIdsJson));
+		params.put("deleteRecoIds", JsonData.fromJson(deleteRecoIdsJson));
+		params.put("transferRecoIds", JsonData.fromJson(transferRecoIdsJson));
+		params.put("deleteSpeciesIds", JsonData.fromJson(deleteSpeciesIdsJson));
 		String commonNamesJson = taxonomyData.getCommonNames() != null
 				? mapper.writeValueAsString(taxonomyData.getCommonNames())
 				: "null";

@@ -6,15 +6,17 @@ String normalizedName = params.normalized_name;
 String oldName = params.old_name;
 String position = params.position;
 long targetId = params.targetId;
+def recoId = params.recoId;
+String scientificName = params.scientificName;
 String status = params.status;
 String rank = params.rank;
 List breadCrumbs = params.breadCrumbs;
-List transferSynonymIds = params.transferSynonymIds;
 List bulkIds = params.bulkIds;
+List deleteRecoIds = params.deleteRecoIds;
+List transferRecoIds = params.transferRecoIds;
 def newId = params.newId;
 
 List recoVotes = ctx._source.all_reco_vote;
-long recoId = -1;
 if (recoVotes != null) {
     int size = recoVotes.size();
     for (int i = 0; i < size; i++) {
@@ -22,11 +24,20 @@ if (recoVotes != null) {
         if (reco?.scientific_name == null) continue;
 
         def sciName = reco.scientific_name;
+        if (reco?.recommendation_id == recoId && !deleteRecoIds.contains(reco.recommendation_id)){
+        	if (scientificName!=null){
+        		sciName.name = scientificName;
+        		updated = true;
+        	}
+        } else if (deleteRecoIds.contains(reco.recommendation_id)){
+        	sciName.accepted_name_id = null;
+        	sciName.taxon_detail = null;
+        	updated = true;
+        }
 
         def taxonDetail = sciName.taxon_detail;
-        if (taxonDetail != null && taxonDetail.id == targetId) {
+        if (taxonDetail != null && taxonDetail.id == targetId && !deleteRecoIds.contains(reco.recommendation_id)) {
         	if (newName != null){
-	            sciName.name                = normalizedName;
 	            taxonDetail.name            = newName;
 	            taxonDetail.scientific_name = normalizedName;
 	            taxonDetail.italicised_form = italicisedName;
@@ -52,8 +63,7 @@ if (recoVotes != null) {
             	taxonDetail.rank            = rank;
             	updated = true;
             }
-            recoId = reco.recommendation_id;
-        } else if (taxonDetail != null && transferSynonymIds != null && transferSynonymIds.contains(taxonDetail.id)){
+        } else if (transferRecoIds != null && transferRecoIds.contains(reco.recommendation_id)){
         	sciName.accepted_name_id = newId;
         	updated = true;
         } else if (taxonDetail != null && bulkIds != null && bulkIds.contains(taxonDetail.id)){
@@ -66,7 +76,7 @@ if (recoVotes != null) {
 }
 
 List hierarchy = ctx._source.max_voted_reco?.hierarchy;
-if (hierarchy != null && breadCrumbs != null) {
+if (hierarchy != null && breadCrumbs != null && !deleteRecoIds.contains(ctx._source.max_voted_reco?.id)) {
     int cutIndex = -1;
     for (int i = 0; i < hierarchy.size(); i++) {
         def entry = hierarchy.get(i);
@@ -96,6 +106,9 @@ if (hierarchy != null && breadCrumbs != null) {
        ctx._source.max_voted_reco.hierarchy = trimmed;
        updated = true;
     }
+} else if(deleteRecoIds.contains(ctx._source.max_voted_reco?.id)){
+	ctx._source.max_voted_reco.hierarchy = null;
+    updated = true;
 } else if (hierarchy == null && breadCrumbs != null && ctx._source.max_voted_reco?.id == recoId) {
     List trimmed = new ArrayList();
     for (int i = 0; i < breadCrumbs.size(); i++) {
@@ -125,9 +138,9 @@ if (hierarchy != null && breadCrumbs != null) {
      }
 }
 
-if (ctx._source.max_voted_reco?.id == recoId) {
+if (ctx._source.max_voted_reco?.id == recoId && !deleteRecoIds.contains(ctx._source.max_voted_reco?.id)) {
 	if (newName!=null){
-	    ctx._source.max_voted_reco.scientific_name = normalizedName;
+	    ctx._source.max_voted_reco.scientific_name = scientificName;
 	    ctx._source.max_voted_reco.italicised_form = italicisedName;
 	    updated = true;
     }
@@ -139,6 +152,11 @@ if (ctx._source.max_voted_reco?.id == recoId) {
     	ctx._source.max_voted_reco.taxonstatus = status;
     	updated = true;
     }
+} else if (deleteRecoIds.contains(ctx._source.max_voted_reco?.id)){
+	ctx._source.max_voted_reco.italicised_form = null;
+	ctx._source.max_voted_reco.rank = null;
+	ctx._source.max_voted_reco.taxonstatus = null;
+	updated = true;
 }
 
 if (updated) {

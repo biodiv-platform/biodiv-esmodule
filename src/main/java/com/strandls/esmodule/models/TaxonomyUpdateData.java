@@ -5,13 +5,18 @@ import java.util.List;
 public class TaxonomyUpdateData {
 
 	private Long targetId;
+	private Long recoId;
+	private Long speciesId;
 	private String name;
 	private String normalizedName;
 	private String oldName;
 	private String italicisedForm;
 	private String canonicalForm;
+	private String binomialForm;
 	private String position;
 	private String timestamp;
+	private String scientificName;
+	private String title;
 	private List<Breadcrumb> breadCrumbs;
 	private String rank;
 	private String status;
@@ -19,28 +24,13 @@ public class TaxonomyUpdateData {
 	private List<Object> commonNames;
 	private Long newId;
 	private List<Long> bulkIds;
+	private List<Long> deleteRecoIds;
+	private List<Long> transferRecoIds;
+	private List<Long> deleteSpeciesIds;
+	private List<Breadcrumb> acceptedBreadCrumbs;
+	private List<Object> synonyms;
 
 	public TaxonomyUpdateData() {
-	}
-
-	public TaxonomyUpdateData(Long targetId, String name, String normalizedName, String oldName, String italicisedForm,
-			String canonicalForm, String position, String timestamp, List<Breadcrumb> breadCrumbs, String rank,
-			String status, List<Long> transferSynonymIds, Long newId, List<Object> commonNames, List<Long> bulkIds) {
-		this.targetId = targetId;
-		this.name = name;
-		this.normalizedName = normalizedName;
-		this.oldName = oldName;
-		this.italicisedForm = italicisedForm;
-		this.canonicalForm = canonicalForm;
-		this.position = position;
-		this.timestamp = timestamp;
-		this.breadCrumbs = breadCrumbs;
-		this.rank = rank;
-		this.status = status;
-		this.transferSynonymIds = transferSynonymIds;
-		this.newId = newId;
-		this.commonNames = commonNames;
-		this.bulkIds = bulkIds;
 	}
 
 	public Long getTargetId() {
@@ -49,6 +39,22 @@ public class TaxonomyUpdateData {
 
 	public void setTargetId(Long targetId) {
 		this.targetId = targetId;
+	}
+	
+	public Long getRecoId() {
+		return recoId;
+	}
+
+	public void setRecoId(Long recoId) {
+		this.recoId = recoId;
+	}
+	
+	public Long getSpeciesId() {
+		return speciesId;
+	}
+
+	public void setSpeciesId(Long speciesId) {
+		this.speciesId = speciesId;
 	}
 
 	public String getName() {
@@ -90,6 +96,14 @@ public class TaxonomyUpdateData {
 	public void setCanonicalForm(String canonicalForm) {
 		this.canonicalForm = canonicalForm;
 	}
+	
+	public String getBinomialForm() {
+		return binomialForm;
+	}
+
+	public void setBinomialForm(String binomialForm) {
+		this.binomialForm = binomialForm;
+	}
 
 	public String getPosition() {
 		return position;
@@ -106,6 +120,22 @@ public class TaxonomyUpdateData {
 	public void setTimestamp(String timestamp) {
 		this.timestamp = timestamp;
 	}
+	
+	public String getScientificName() {
+		return scientificName;
+	}
+
+	public void setScientificName(String scientificName) {
+		this.scientificName = scientificName;
+	}
+	
+	public String getTitle() {
+		return title;
+	}
+
+	public void setTitle(String title) {
+		this.title = title;
+	}
 
 	public List<Breadcrumb> getBreadCrumbs() {
 		return breadCrumbs;
@@ -113,6 +143,14 @@ public class TaxonomyUpdateData {
 
 	public void setBreadCrumbs(List<Breadcrumb> breadCrumbs) {
 		this.breadCrumbs = breadCrumbs;
+	}
+	
+	public List<Breadcrumb> getAcceptedBreadCrumbs() {
+		return acceptedBreadCrumbs;
+	}
+
+	public void setAcceptedBreadCrumbs(List<Breadcrumb> acceptedBreadCrumbs) {
+		this.acceptedBreadCrumbs = acceptedBreadCrumbs;
 	}
 
 	public String getRank() {
@@ -155,6 +193,14 @@ public class TaxonomyUpdateData {
 		this.commonNames = commonNames;
 	}
 	
+	public List<Object> getSynonyms(){
+		return synonyms;
+	}
+	
+	public void setSynonyms(List<Object> synonyms) {
+		this.synonyms = synonyms;
+	}
+	
 	public List<Long> getBulkIds(){
 		return bulkIds;
 	}
@@ -162,4 +208,28 @@ public class TaxonomyUpdateData {
 	public void setBulkIds(List<Long> bulkIds) {
 		this.bulkIds = bulkIds;
 	}
+	
+	public List<Long> getDeleteRecoIds(){
+		return deleteRecoIds;
+	}
+	
+	public void setDeleteRecoIds(List<Long> deleteRecoIds) {
+		this.deleteRecoIds = deleteRecoIds;
+	}
+	
+	public List<Long> getTransferRecoIds(){
+		return transferRecoIds;
+	}
+	
+	public void setTransferRecoIds(List<Long> transferRecoIds) {
+		this.transferRecoIds = transferRecoIds;
+	}
+	
+	public List<Long> getDeleteSpeciesIds(){
+		return deleteSpeciesIds;
+	}
+	
+	public void setDeleteSpeciesIds(List<Long> deleteSpeciesIds) {
+		this.deleteSpeciesIds = deleteSpeciesIds;
+	} 
 }
