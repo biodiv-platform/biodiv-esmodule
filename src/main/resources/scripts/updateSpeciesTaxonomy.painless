@@ -16,17 +16,17 @@ List deleteSpeciesIds = params.deleteSpeciesIds;
 List transferSynonymIds = params.transferSynonymIds;
 List transferSpeciesIds = params.transferSpeciesIds;
 
-if (ctx._source.species?.id == speciesId && !deleteSpeciesIds.contains(ctx._source.species?.id)) {
+if (ctx._source.species?.id == speciesId && (deleteSpeciesIds==null || !deleteSpeciesIds.contains(ctx._source.species?.id))) {
 	if (title!=null){
 		ctx._source.species.title = title;
 		updated = true;
 	}
-} else if (deleteSpeciesIds.contains(ctx._source.species?.id)){
+} else if (deleteSpeciesIds!=null && deleteSpeciesIds.contains(ctx._source.species?.id)){
 	ctx._source.species.taxonConceptId = null;
 	updated = true;
 }
 
-if (ctx._source.taxonomyDefinition?.id == targetId && !deleteSpeciesIds.contains(ctx._source.species?.id)) {
+if (ctx._source.taxonomyDefinition?.id == targetId && (deleteSpeciesIds==null || !deleteSpeciesIds.contains(ctx._source.species?.id))) {
 	if (newName!=null){
 	    ctx._source.taxonomyDefinition.canonicalForm = canonicalName;
 	    ctx._source.taxonomyDefinition.italicisedForm = italicisedName;
@@ -58,7 +58,7 @@ if (ctx._source.taxonomyDefinition?.id == targetId && !deleteSpeciesIds.contains
  }
 
 List synonyms = ctx._source.taxonomicNames?.synonyms;
-if (synonyms != null && !deleteSpeciesIds.contains(ctx._source.species?.id)) {
+if (synonyms != null && (deleteSpeciesIds==null || !deleteSpeciesIds.contains(ctx._source.species?.id))) {
     int size = synonyms.size();
     int synonym_index = -1;
     List transferIndices = new ArrayList();
@@ -116,7 +116,7 @@ if (synonyms != null && !deleteSpeciesIds.contains(ctx._source.species?.id)) {
     	synonyms.remove(synonym_index);
     	ctx._source.taxonomicNames.synonyms = synonyms;
     }
-} else if (deleteSpeciesIds.contains(ctx._source.species?.id)){
+} else if (deleteSpeciesIds!=null && deleteSpeciesIds.contains(ctx._source.species?.id)){
 	ctx._source.taxonomicNames.synonyms = null;
 	ctx._source.taxonomicNames.commonNames = [null];
 	ctx._source.breadCrumbs = null;
@@ -124,7 +124,7 @@ if (synonyms != null && !deleteSpeciesIds.contains(ctx._source.species?.id)) {
 }
 
 List hierarchy = ctx._source.breadCrumbs;
-if (hierarchy != null && breadCrumbs != null && ctx._source.taxonomyDefinition?.id == targetId && deleteSpeciesIds.contains(ctx._source.species?.id)) {
+if (hierarchy != null && breadCrumbs != null && ctx._source.taxonomyDefinition?.id == targetId && (deleteSpeciesIds==null || !deleteSpeciesIds.contains(ctx._source.species?.id))) {
 	if (ctx._source.taxonomyDefinition.status != status && status == "ACCEPTED") {
 		List trimmed = new ArrayList();
 	    for (int i = 0; i < breadCrumbs.size(); i++) {
@@ -168,7 +168,7 @@ if (hierarchy != null && breadCrumbs != null && ctx._source.taxonomyDefinition?.
 	       updated = true;
        }
     }
-} else if (hierarchy != null && breadCrumbs == null && ctx._source.taxonomyDefinition?.id == targetId && deleteSpeciesIds.contains(ctx._source.species?.id)) {
+} else if (hierarchy != null && breadCrumbs == null && ctx._source.taxonomyDefinition?.id == targetId && (deleteSpeciesIds==null || !deleteSpeciesIds.contains(ctx._source.species?.id))) {
 	if (newName!=null){
     	int size = hierarchy.size();
 	    for (int i = 0; i < size; i++) {
