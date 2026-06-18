@@ -943,5 +943,43 @@ public class ESController {
 					.build();
 		}
 	}
+	
+	@POST
+	@Path("observationUpdate")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "fetch the observation uploaded freq by user", description = "Returns the maxvotedId freq")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
+			@ApiResponse(responseCode = "400", description = "unable to get the result") })
+	public Response updateObservation(TaxonomyUpdateData taxonomyData) {
+		try {
+			List<FieldValue> targetIds = Stream.concat(Stream.of(FieldValue.of(taxonomyData.getTargetId())),
+					Stream.concat(
+							taxonomyData.getTransferSynonymIds() != null
+									? taxonomyData.getTransferSynonymIds().stream().map(FieldValue::of)
+									: Stream.empty(),
+							taxonomyData.getBulkIds() != null ? taxonomyData.getBulkIds().stream().map(FieldValue::of)
+									: Stream.empty()))
+					.distinct().collect(Collectors.toList());
+			Query filterQuery = BoolQuery
+					.of(b -> b
+							.should(TermsQuery.of(t -> t.field("max_voted_reco.hierarchy.taxon_id")
+									.terms(TermsQueryField.of(f -> f.value(targetIds))))._toQuery(),
+									TermsQuery.of(t -> t.field("all_reco_vote.scientific_name.taxon_detail.id")
+											.terms(TermsQueryField.of(f -> f.value(targetIds))))._toQuery())
+							.minimumShouldMatch("1"))
+					._toQuery();
+
+			elasticSearchService.observationUpdateByTaxonId(taxonomyData, filterQuery);
+
+			return Response.status(Status.OK).entity("Async update initiated successfully").build();
+		} catch (Exception e) {
+			// Log the exception properly
+			e.printStackTrace(); // Replace with proper logging: logger.error("Error in async update", e);
+			return Response.status(Status.BAD_REQUEST).entity("Failed to initiate async update: " + e.getMessage())
+					.build();
+		}
+	}
 
 }

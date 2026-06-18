@@ -375,4 +375,6 @@ public interface ElasticSearchService {
 	public MapResponse autocompleteSpeciesContributors(String index, String type, String name) throws IOException;
 	
 	public void asyncUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery, Query speciesQuery) throws IOException;
+	
+	public void observationUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery) throws IOException;
 }
