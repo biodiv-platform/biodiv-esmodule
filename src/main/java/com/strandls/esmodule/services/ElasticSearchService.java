@@ -377,4 +377,6 @@ public interface ElasticSearchService {
 	public void asyncUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery, Query speciesQuery) throws IOException;
 	
 	public void observationUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery) throws IOException;
+	
+	public void speciesUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query speciesQuery) throws IOException;
 }

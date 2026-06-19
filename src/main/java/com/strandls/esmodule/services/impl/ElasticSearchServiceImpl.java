@@ -2404,8 +2404,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String transferSynonymIdsJson = taxonomyData.getTransferSynonymIds() != null
 				? mapper.writeValueAsString(taxonomyData.getTransferSynonymIds())
 				: "null";
-		String bulkIdsJson = taxonomyData.getBulkIds() != null
-				? mapper.writeValueAsString(taxonomyData.getBulkIds())
+		String bulkIdsJson = taxonomyData.getBulkIds() != null ? mapper.writeValueAsString(taxonomyData.getBulkIds())
 				: "null";
 		String deleteRecoIdsJson = taxonomyData.getDeleteRecoIds() != null
 				? mapper.writeValueAsString(taxonomyData.getDeleteRecoIds())
@@ -2453,9 +2452,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		response = client.getClient().updateByQuery(updateByQueryRequest);
 		logger.info("UpdateByQuery Species task ID: {}", response.task());
 	}
-	
-	public void observationUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery)
-			throws IOException {
+
+	public void observationUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery) throws IOException {
 
 		Map<String, JsonData> params = new HashMap<>();
 		params.put("targetId", toJsonData(taxonomyData.getTargetId()));
@@ -2483,8 +2481,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String transferSynonymIdsJson = taxonomyData.getTransferSynonymIds() != null
 				? mapper.writeValueAsString(taxonomyData.getTransferSynonymIds())
 				: "null";
-		String bulkIdsJson = taxonomyData.getBulkIds() != null
-				? mapper.writeValueAsString(taxonomyData.getBulkIds())
+		String bulkIdsJson = taxonomyData.getBulkIds() != null ? mapper.writeValueAsString(taxonomyData.getBulkIds())
 				: "null";
 		String deleteRecoIdsJson = taxonomyData.getDeleteRecoIds() != null
 				? mapper.writeValueAsString(taxonomyData.getDeleteRecoIds())
@@ -2520,6 +2517,69 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		logger.info("UpdateByQuery Observation task ID: {}", response.task());
 	}
 
+	public void speciesUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query speciesQuery) throws IOException {
+
+		Map<String, JsonData> params = new HashMap<>();
+		params.put("targetId", toJsonData(taxonomyData.getTargetId()));
+		params.put("recoId", toJsonData(taxonomyData.getRecoId()));
+		params.put("speciesId", toJsonData(taxonomyData.getSpeciesId()));
+		params.put("scientificName", toJsonData(taxonomyData.getScientificName()));
+		params.put("title", toJsonData(taxonomyData.getTitle()));
+		params.put("binomialForm", toJsonData(taxonomyData.getBinomialForm()));
+		params.put("name", toJsonData(taxonomyData.getName()));
+		params.put("normalized_name", toJsonData(taxonomyData.getNormalizedName()));
+		params.put("old_name", toJsonData(taxonomyData.getOldName()));
+		params.put("italicised_form", toJsonData(taxonomyData.getItalicisedForm()));
+		params.put("canonical_form", toJsonData(taxonomyData.getCanonicalForm()));
+		params.put("position", toJsonData(taxonomyData.getPosition()));
+		params.put("timestamp", toJsonData(taxonomyData.getTimestamp()));
+		params.put("rank", toJsonData(taxonomyData.getRank()));
+		params.put("status", toJsonData(taxonomyData.getStatus()));
+		params.put("newId", toJsonData(taxonomyData.getNewId()));
+
+		// breadCrumbs and transferSynonymIds
+		ObjectMapper mapper = new ObjectMapper();
+		String breadCrumbsJson = taxonomyData.getBreadCrumbs() != null
+				? mapper.writeValueAsString(taxonomyData.getBreadCrumbs())
+				: "null";
+		String transferSynonymIdsJson = taxonomyData.getTransferSynonymIds() != null
+				? mapper.writeValueAsString(taxonomyData.getTransferSynonymIds())
+				: "null";
+		String bulkIdsJson = taxonomyData.getBulkIds() != null ? mapper.writeValueAsString(taxonomyData.getBulkIds())
+				: "null";
+		String deleteRecoIdsJson = taxonomyData.getDeleteRecoIds() != null
+				? mapper.writeValueAsString(taxonomyData.getDeleteRecoIds())
+				: "null";
+		String transferRecoIdsJson = taxonomyData.getTransferRecoIds() != null
+				? mapper.writeValueAsString(taxonomyData.getTransferRecoIds())
+				: "null";
+		String deleteSpeciesIdsJson = taxonomyData.getDeleteSpeciesIds() != null
+				? mapper.writeValueAsString(taxonomyData.getDeleteSpeciesIds())
+				: "null";
+		params.put("breadCrumbs", JsonData.fromJson(breadCrumbsJson));
+		params.put("transferSynonymIds", JsonData.fromJson(transferSynonymIdsJson));
+		params.put("bulkIds", JsonData.fromJson(bulkIdsJson));
+		params.put("deleteRecoIds", JsonData.fromJson(deleteRecoIdsJson));
+		params.put("transferRecoIds", JsonData.fromJson(transferRecoIdsJson));
+		params.put("deleteSpeciesIds", JsonData.fromJson(deleteSpeciesIdsJson));
+		String commonNamesJson = taxonomyData.getCommonNames() != null
+				? mapper.writeValueAsString(taxonomyData.getCommonNames())
+				: "null";
+		params.put("commonNames", JsonData.fromJson(commonNamesJson));
+
+		String painlessSpeciesScript = ESmoduleConfig.fetchFileAsString("scripts/updateSpeciesTaxonomy.painless");
+
+		Script speciesScript = Script.of(s -> s.source(src -> src.scriptString(painlessSpeciesScript))
+				.lang(ScriptLanguage.Painless).params(params));
+
+		UpdateByQueryRequest updateByQueryRequest = UpdateByQueryRequest.of(u -> u.index("extended_species")
+				.conflicts(Conflicts.Proceed).waitForCompletion(false).script(speciesScript).query(speciesQuery));
+
+		logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
+
+		UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
+		logger.info("UpdateByQuery Species task ID: {}", response.task());
+	}
 
 	private String sanitize(String value) {
 		return value == null ? null : value.replaceAll("[\n\r\t]", "_");
