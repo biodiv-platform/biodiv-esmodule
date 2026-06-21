@@ -379,4 +379,6 @@ public interface ElasticSearchService {
 	public void observationUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery) throws IOException;
 	
 	public void speciesUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query speciesQuery) throws IOException;
+
+	MapQueryResponse bulkDelete(String index, String type, List<String> documentIds) throws IOException;
 }

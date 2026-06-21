@@ -1,6 +1,7 @@
 package com.strandls.esmodule.controllers;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -203,6 +204,29 @@ public class ESController {
 			throw new WebApplicationException(
 					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
 		}
+	}
+	
+	@DELETE
+	@Path(ApiConstants.DATA + "/{index}/{type}/bulk")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Bulk Delete Documents", description = "Returns Success or Failure")
+	@ApiResponses({
+	        @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = MapQueryResponse.class))),
+	        @ApiResponse(responseCode = "400", description = "Bad Request - Empty document IDs list"),
+	        @ApiResponse(responseCode = "500", description = "ERROR") })
+	public MapQueryResponse bulkDelete(@PathParam("index") String index, @PathParam("type") String type,
+	        List<String> documentIds) {
+	    if (documentIds == null || documentIds.isEmpty()) {
+	        throw new WebApplicationException(
+	                Response.status(Status.BAD_REQUEST).entity("Document IDs list cannot be empty").build());
+	    }
+	    try {
+	        return elasticSearchService.bulkDelete(index, type, documentIds);
+	    } catch (IOException e) {
+	        throw new WebApplicationException(
+	                Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
+	    }
 	}
 
 	@POST
@@ -943,7 +967,7 @@ public class ESController {
 					.build();
 		}
 	}
-	
+
 	@POST
 	@Path("observationUpdate")
 	@Consumes(MediaType.APPLICATION_JSON)
@@ -981,7 +1005,7 @@ public class ESController {
 					.build();
 		}
 	}
-	
+
 	@POST
 	@Path("speciesUpdate")
 	@Consumes(MediaType.APPLICATION_JSON)
@@ -992,15 +1016,31 @@ public class ESController {
 			@ApiResponse(responseCode = "400", description = "unable to get the result") })
 	public Response updateSpecies(TaxonomyUpdateData taxonomyData) {
 		try {
-			Query speciesQuery = BoolQuery.of(b -> b.should(
+			List<Query> shouldClauses = new ArrayList<>();
+
+			shouldClauses.add(
 					TermQuery.of(t -> t.field("taxonomyDefinition.id").value(FieldValue.of(taxonomyData.getTargetId())))
-							._toQuery(),
-					TermQuery.of(t -> t.field("breadCrumbs.id").value(FieldValue.of(taxonomyData.getTargetId())))
-							._toQuery(),
-					TermQuery.of(
-							t -> t.field("taxonomicNames.synonyms.id").value(FieldValue.of(taxonomyData.getTargetId())))
-							._toQuery())
-					.minimumShouldMatch("1"))._toQuery();
+							._toQuery());
+			shouldClauses.add(TermQuery
+					.of(t -> t.field("breadCrumbs.id").value(FieldValue.of(taxonomyData.getTargetId())))._toQuery());
+			shouldClauses.add(TermQuery
+					.of(t -> t.field("taxonomicNames.synonyms.id").value(FieldValue.of(taxonomyData.getTargetId())))
+					._toQuery());
+
+			if (taxonomyData.getNewId() != null) {
+				shouldClauses.add(TermQuery
+						.of(t -> t.field("taxonomyDefinition.id").value(FieldValue.of(taxonomyData.getNewId())))
+						._toQuery());
+			}
+
+			if (taxonomyData.getTransferSynonymIds() != null && !taxonomyData.getTransferSynonymIds().isEmpty()) {
+				List<FieldValue> synonymIdValues = taxonomyData.getTransferSynonymIds().stream().map(FieldValue::of)
+						.collect(Collectors.toList());
+				shouldClauses.add(TermsQuery.of(t -> t.field("taxonomicNames.synonyms.id")
+						.terms(TermsQueryField.of(f -> f.value(synonymIdValues))))._toQuery());
+			}
+
+			Query speciesQuery = BoolQuery.of(b -> b.should(shouldClauses).minimumShouldMatch("1"))._toQuery();
 
 			elasticSearchService.speciesUpdateByTaxonId(taxonomyData, speciesQuery);
 

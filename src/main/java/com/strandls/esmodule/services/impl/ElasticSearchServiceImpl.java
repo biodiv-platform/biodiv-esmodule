@@ -210,6 +210,46 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		return new MapQueryResponse(queryStatus, "");
 	}
+	
+	@Override
+	public MapQueryResponse bulkDelete(String index, String type, List<String> documentIds) throws IOException {
+	    String indexParam = index.replaceAll("[\n\r\t]", "_");
+	    String typeParam = type.replaceAll("[\n\r\t]", "_");
+
+	    logger.info("Trying to bulk delete index: {}, type: {} & ids: {}", indexParam, typeParam, documentIds.size());
+
+	    List<BulkOperation> bulkOperations = documentIds.stream()
+	            .map(documentId -> BulkOperation.of(op -> op
+	                    .delete(d -> d
+	                            .index(index)
+	                            .id(documentId))))
+	            .collect(Collectors.toList());
+
+	    BulkRequest bulkRequest = BulkRequest.of(b -> b
+	            .index(index)
+	            .operations(bulkOperations));
+
+	    BulkResponse bulkResponse = client.getClient().bulk(bulkRequest);
+
+	    if (bulkResponse.errors()) {
+	        List<String> failedIds = bulkResponse.items().stream()
+	                .filter(item -> item.error() != null)
+	                .map(BulkResponseItem::id)
+	                .collect(Collectors.toList());
+
+	        logger.error("Bulk delete partially failed for index: {}, type: {}, failed IDs: {}",
+	                indexParam, typeParam, failedIds);
+
+	        return new MapQueryResponse(MapQueryStatus.NOT_FOUND, "Failed IDs: " + failedIds);
+	    }
+
+	    MapQueryStatus queryStatus = MapQueryStatus.DELETED;
+
+	    logger.info("Bulk deleted index: {}, type: {} & ids count: {} with status {}",
+	            indexParam, typeParam, documentIds.size(), queryStatus);
+
+	    return new MapQueryResponse(queryStatus, "");
+	}
 
 	private JsonNode[] parseJson(String jsonArray, List<MapQueryResponse> responses) throws IOException {
 		ObjectMapper mapper = new ObjectMapper();
@@ -2566,6 +2606,10 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				? mapper.writeValueAsString(taxonomyData.getCommonNames())
 				: "null";
 		params.put("commonNames", JsonData.fromJson(commonNamesJson));
+		String synonymsJson = taxonomyData.getSynonyms() != null
+				? mapper.writeValueAsString(taxonomyData.getSynonyms())
+				: "null";
+		params.put("synonyms", JsonData.fromJson(synonymsJson));
 
 		String painlessSpeciesScript = ESmoduleConfig.fetchFileAsString("scripts/updateSpeciesTaxonomy.painless");
 
