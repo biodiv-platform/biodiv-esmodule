@@ -205,28 +205,28 @@ public class ESController {
 					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
 		}
 	}
-	
+
 	@DELETE
 	@Path(ApiConstants.DATA + "/{index}/{type}/bulk")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Bulk Delete Documents", description = "Returns Success or Failure")
 	@ApiResponses({
-	        @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = MapQueryResponse.class))),
-	        @ApiResponse(responseCode = "400", description = "Bad Request - Empty document IDs list"),
-	        @ApiResponse(responseCode = "500", description = "ERROR") })
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = MapQueryResponse.class))),
+			@ApiResponse(responseCode = "400", description = "Bad Request - Empty document IDs list"),
+			@ApiResponse(responseCode = "500", description = "ERROR") })
 	public MapQueryResponse bulkDelete(@PathParam("index") String index, @PathParam("type") String type,
-	        List<String> documentIds) {
-	    if (documentIds == null || documentIds.isEmpty()) {
-	        throw new WebApplicationException(
-	                Response.status(Status.BAD_REQUEST).entity("Document IDs list cannot be empty").build());
-	    }
-	    try {
-	        return elasticSearchService.bulkDelete(index, type, documentIds);
-	    } catch (IOException e) {
-	        throw new WebApplicationException(
-	                Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
-	    }
+			List<String> documentIds) {
+		if (documentIds == null || documentIds.isEmpty()) {
+			throw new WebApplicationException(
+					Response.status(Status.BAD_REQUEST).entity("Document IDs list cannot be empty").build());
+		}
+		try {
+			return elasticSearchService.bulkDelete(index, type, documentIds);
+		} catch (IOException e) {
+			throw new WebApplicationException(
+					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
+		}
 	}
 
 	@POST
@@ -665,13 +665,17 @@ public class ESController {
 			@ApiResponse(responseCode = "500", description = "ERROR") })
 	public Response autoCompletion(@PathParam("index") String index, @PathParam("type") String type,
 			@QueryParam("field") String field, @QueryParam("text") String fieldText,
-			@QueryParam("groupId") String filterField, @QueryParam("group") Integer filter) {
+			@QueryParam("groupId") String filterField, @QueryParam("group") Integer filter,
+			@QueryParam("rank") String rank) {
 		String elasticIndex = utilityMethods.getEsIndexConstants(index);
 		String elasticType = utilityMethods.getEsIndexTypeConstant(type);
 		try {
 			List<? extends ElasticIndexes> records = null;
-			if (filter == null) {
+			if (filter == null && rank == null) {
 				records = elasticSearchService.autoCompletion(elasticIndex, elasticType, field, fieldText,
+						utilityMethods.getClass(index));
+			} else if (rank != null) {
+				records = elasticSearchService.autoCompletion(elasticIndex, elasticType, field, fieldText, rank,
 						utilityMethods.getClass(index));
 			} else {
 				records = elasticSearchService.autoCompletion(elasticIndex, elasticType, field, fieldText, filterField,

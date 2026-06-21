@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.strandls.esmodule.indexes.pojo.ElasticIndexes;
 import com.strandls.esmodule.indexes.pojo.ExtendedTaxonDefinition;
 import com.strandls.esmodule.models.AggregationResponse;
 import com.strandls.esmodule.models.AuthorUploadedObservationInfo;
@@ -291,6 +292,9 @@ public interface ElasticSearchService {
 	 */
 	<T> List<T> autoCompletion(String index, String type, String field, String text, String filterField, Integer filter,
 			Class<T> classMapped);
+	
+	<T> List<T> autoCompletion(String elasticIndex, String elasticType, String field,
+			String fieldText, String rank, Class classMapped);
 
 	/**
 	 * @param <T>

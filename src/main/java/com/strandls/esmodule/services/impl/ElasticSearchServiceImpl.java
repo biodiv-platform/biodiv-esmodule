@@ -1451,6 +1451,36 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		return new ArrayList<>();
 	}
+	
+	@Override
+	public <T> List<T> autoCompletion(String index, String type, String field, String fieldText,
+	        String rank, Class classMapped) {
+	    String normalizedField = normalizeAutocompleteField(field);
+
+	    try {
+	        SearchResponse<Map> searchResponse = client
+	                .getClient().search(
+	                        s -> s.index(index).size(10000)
+	                                .source(src -> src.filter(
+	                                        f -> f.excludes(Arrays.asList(Constants.TIMESTAMP, Constants.VERSION))))
+	                                .query(q -> q.bool(
+	                                        b -> {
+	                                            b.must(m -> m.matchPhrase(mp -> mp.field(normalizedField).query(fieldText)));
+	                                            if (rank != null) {
+	                                                b.filter(f -> f.term(t -> t.field("rank").value(rank)));
+	                                            }
+	                                            return b;
+	                                        })),
+	                        Map.class);
+
+	        return mapSearchHits(searchResponse, classMapped);
+
+	    } catch (Exception e) {
+	        logger.error("Error in filtered autoCompletion: {}", e.getMessage(), e);
+	    }
+
+	    return new ArrayList<>();
+	}
 
 	@Override
 	public <T> List<T> autoCompletion(String index, String type, String field, String text, String filterField,
