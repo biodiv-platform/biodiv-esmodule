@@ -127,7 +127,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		co.elastic.clients.elasticsearch.core.IndexResponse response = client.getClient()
 				.index(i -> i.index(index).id(documentId).document(docMap));
 
-		MapQueryStatus queryStatus = MapQueryStatus.valueOf(response.result().name());
+		MapQueryStatus queryStatus = MapQueryStatus.valueOf(response.result().name().toUpperCase());
 
 		logger.info("Created index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
 				queryStatus);
@@ -179,7 +179,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		co.elastic.clients.elasticsearch.core.UpdateResponse<Map> updateResponse = client.getClient()
 				.update(u -> u.index(index).id(documentId).doc(document), Map.class);
-		MapQueryStatus queryStatus = MapQueryStatus.valueOf(updateResponse.result().name());
+		MapQueryStatus queryStatus = MapQueryStatus.valueOf(updateResponse.result().name().toUpperCase());
 
 		logger.info("Updated index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
 				queryStatus);
@@ -203,7 +203,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		logger.info("Trying to delete index: {}, type: {} & id: {}", indexParam, typeParam, documentIdParam);
 
 		DeleteResponse deleteResponse = client.getClient().delete(d -> d.index(index).id(documentId));
-		MapQueryStatus queryStatus = MapQueryStatus.valueOf(deleteResponse.result().name());
+		MapQueryStatus queryStatus = MapQueryStatus.valueOf(deleteResponse.result().name().toUpperCase());
 
 		logger.info("Deleted index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
 				queryStatus);
@@ -367,7 +367,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				failureReason.append(item.error().reason());
 				queryStatus = MapQueryStatus.ERROR;
 			} else {
-				queryStatus = MapQueryStatus.valueOf(item.result());
+				queryStatus = MapQueryStatus.valueOf(item.result().toUpperCase());
 			}
 
 			logger.info(" For index: {}, type: {}, bulk update id: {}, the status is {}", indexParam, typeParam,
@@ -2612,6 +2612,9 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		String breadCrumbsJson = taxonomyData.getBreadCrumbs() != null
 				? mapper.writeValueAsString(taxonomyData.getBreadCrumbs())
 				: "null";
+		String accpetedBreadCrumbsJson = taxonomyData.getAcceptedBreadCrumbs() != null
+				? mapper.writeValueAsString(taxonomyData.getAcceptedBreadCrumbs())
+				: "null";
 		String transferSynonymIdsJson = taxonomyData.getTransferSynonymIds() != null
 				? mapper.writeValueAsString(taxonomyData.getTransferSynonymIds())
 				: "null";
@@ -2627,6 +2630,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				? mapper.writeValueAsString(taxonomyData.getDeleteSpeciesIds())
 				: "null";
 		params.put("breadCrumbs", JsonData.fromJson(breadCrumbsJson));
+		params.put("acceptedBreadCrumbs", JsonData.fromJson(accpetedBreadCrumbsJson));
 		params.put("transferSynonymIds", JsonData.fromJson(transferSynonymIdsJson));
 		params.put("bulkIds", JsonData.fromJson(bulkIdsJson));
 		params.put("deleteRecoIds", JsonData.fromJson(deleteRecoIdsJson));
