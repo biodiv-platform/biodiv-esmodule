@@ -14,7 +14,7 @@ List breadCrumbs = params.breadCrumbs;
 List bulkIds = params.bulkIds;
 List transferSynonymIds = params.transferSynonymIds;
 List transferSpeciesIds = params.transferSpeciesIds;
-long newTaxonId = params.newId;
+def newTaxonId = params.newId;
 List newSynonyms = params.synonyms;
 List acceptedBreadCrumbs = params.acceptedBreadCrumbs;
 
