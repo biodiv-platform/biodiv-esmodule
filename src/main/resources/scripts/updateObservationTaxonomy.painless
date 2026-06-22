@@ -66,7 +66,7 @@ if (recoVotes != null) {
         } else if (transferRecoIds != null && transferRecoIds.contains(reco.recommendation_id)){
         	sciName.accepted_name_id = newId;
         	updated = true;
-        } else if (taxonDetail != null && bulkIds != null && bulkIds.contains(taxonDetail.id)){
+        } else if (taxonDetail != null && bulkIds != null && bulkIds.contains(reco.recommendation_id)){
         	if (position!=null){
             	taxonDetail.position        = position;
             	updated = true;
