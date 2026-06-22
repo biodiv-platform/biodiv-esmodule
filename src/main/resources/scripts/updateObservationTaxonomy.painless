@@ -80,7 +80,7 @@ if (hierarchy != null && breadCrumbs != null && (deleteRecoIds == null || !delet
     int cutIndex = -1;
     for (int i = 0; i < hierarchy.size(); i++) {
         def entry = hierarchy.get(i);
-        if(bulkIds != null && bulkIds.contains(taxonDetail.id) && newId!=null){
+        if(bulkIds != null && bulkIds.contains(entry?.taxon_id) && newId!=null){
         	cutIndex = i;
         	break;
         }
