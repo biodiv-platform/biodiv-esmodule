@@ -115,7 +115,7 @@ if (synonyms != null) {
     }
 }
 
-if (ctx._source.taxonomyDefinition?.id == newTaxonId && newSynonyms != null) {
+if (newTaxonId != null && ctx._source.taxonomyDefinition?.id == newTaxonId && newSynonyms != null) {
     synonyms.addAll(newSynonyms);
     ctx._source.taxonomicNames.synonyms = synonyms;
     updated = true;
