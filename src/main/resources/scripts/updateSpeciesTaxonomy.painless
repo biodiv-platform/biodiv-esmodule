@@ -123,7 +123,7 @@ if (newTaxonId != null && ctx._source.taxonomyDefinition?.id == newTaxonId && ne
 
 List hierarchy = ctx._source.breadCrumbs;
 if (hierarchy != null && breadCrumbs != null) {
-	if (ctx._source.taxonomyDefinition.status != status && status == "ACCEPTED" && ctx._source.taxonomyDefinition?.id == targetId) {
+	if (status!=null && status == "ACCEPTED" && ctx._source.taxonomyDefinition?.id == targetId) {
 		List trimmed = new ArrayList();
 	    for (int i = 0; i < breadCrumbs.size(); i++) {
 	        def crumb = breadCrumbs.get(i);
