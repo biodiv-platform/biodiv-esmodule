@@ -2,9 +2,6 @@ package com.strandls.esmodule.services.impl;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -17,7 +14,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import org.apache.logging.log4j.core.util.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,7 +79,6 @@ import com.strandls.esmodule.services.ElasticSearchService;
 
 import jakarta.inject.Inject;
 import jakarta.json.stream.JsonGenerator;
-import com.fasterxml.jackson.core.type.TypeReference;
 
 /**
  * Implementation of {@link ElasticSearchService}
@@ -210,45 +205,38 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		return new MapQueryResponse(queryStatus, "");
 	}
-	
+
 	@Override
 	public MapQueryResponse bulkDelete(String index, String type, List<String> documentIds) throws IOException {
-	    String indexParam = index.replaceAll("[\n\r\t]", "_");
-	    String typeParam = type.replaceAll("[\n\r\t]", "_");
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
 
-	    logger.info("Trying to bulk delete index: {}, type: {} & ids: {}", indexParam, typeParam, documentIds.size());
+		logger.info("Trying to bulk delete index: {}, type: {} & ids: {}", indexParam, typeParam, documentIds.size());
 
-	    List<BulkOperation> bulkOperations = documentIds.stream()
-	            .map(documentId -> BulkOperation.of(op -> op
-	                    .delete(d -> d
-	                            .index(index)
-	                            .id(documentId))))
-	            .collect(Collectors.toList());
+		List<BulkOperation> bulkOperations = documentIds.stream()
+				.map(documentId -> BulkOperation.of(op -> op.delete(d -> d.index(index).id(documentId))))
+				.collect(Collectors.toList());
 
-	    BulkRequest bulkRequest = BulkRequest.of(b -> b
-	            .index(index)
-	            .operations(bulkOperations));
+		BulkRequest bulkRequest = BulkRequest.of(b -> b.index(index).operations(bulkOperations));
 
-	    BulkResponse bulkResponse = client.getClient().bulk(bulkRequest);
+		BulkResponse bulkResponse = client.getClient().bulk(bulkRequest);
 
-	    if (bulkResponse.errors()) {
-	        List<String> failedIds = bulkResponse.items().stream()
-	                .filter(item -> item.error() != null)
-	                .map(BulkResponseItem::id)
-	                .collect(Collectors.toList());
+		if (bulkResponse.errors()) {
+			List<String> failedIds = bulkResponse.items().stream().filter(item -> item.error() != null)
+					.map(BulkResponseItem::id).collect(Collectors.toList());
 
-	        logger.error("Bulk delete partially failed for index: {}, type: {}, failed IDs: {}",
-	                indexParam, typeParam, failedIds);
+			logger.error("Bulk delete partially failed for index: {}, type: {}, failed IDs: {}", indexParam, typeParam,
+					failedIds);
 
-	        return new MapQueryResponse(MapQueryStatus.NOT_FOUND, "Failed IDs: " + failedIds);
-	    }
+			return new MapQueryResponse(MapQueryStatus.NOT_FOUND, "Failed IDs: " + failedIds);
+		}
 
-	    MapQueryStatus queryStatus = MapQueryStatus.DELETED;
+		MapQueryStatus queryStatus = MapQueryStatus.DELETED;
 
-	    logger.info("Bulk deleted index: {}, type: {} & ids count: {} with status {}",
-	            indexParam, typeParam, documentIds.size(), queryStatus);
+		logger.info("Bulk deleted index: {}, type: {} & ids count: {} with status {}", indexParam, typeParam,
+				documentIds.size(), queryStatus);
 
-	    return new MapQueryResponse(queryStatus, "");
+		return new MapQueryResponse(queryStatus, "");
 	}
 
 	private JsonNode[] parseJson(String jsonArray, List<MapQueryResponse> responses) throws IOException {
@@ -1451,35 +1439,31 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		return new ArrayList<>();
 	}
-	
+
 	@Override
-	public <T> List<T> autoCompletion(String index, String type, String field, String fieldText,
-	        String rank, Class classMapped) {
-	    String normalizedField = normalizeAutocompleteField(field);
+	public <T> List<T> autoCompletion(String index, String type, String field, String fieldText, String rank,
+			Class classMapped) {
+		String normalizedField = normalizeAutocompleteField(field);
 
-	    try {
-	        SearchResponse<Map> searchResponse = client
-	                .getClient().search(
-	                        s -> s.index(index).size(10000)
-	                                .source(src -> src.filter(
-	                                        f -> f.excludes(Arrays.asList(Constants.TIMESTAMP, Constants.VERSION))))
-	                                .query(q -> q.bool(
-	                                        b -> {
-	                                            b.must(m -> m.matchPhrase(mp -> mp.field(normalizedField).query(fieldText)));
-	                                            if (rank != null) {
-	                                                b.filter(f -> f.term(t -> t.field("rank").value(rank)));
-	                                            }
-	                                            return b;
-	                                        })),
-	                        Map.class);
+		try {
+			SearchResponse<Map> searchResponse = client.getClient()
+					.search(s -> s.index(index).size(10000).source(
+							src -> src.filter(f -> f.excludes(Arrays.asList(Constants.TIMESTAMP, Constants.VERSION))))
+							.query(q -> q.bool(b -> {
+								b.must(m -> m.matchPhrase(mp -> mp.field(normalizedField).query(fieldText)));
+								if (rank != null) {
+									b.filter(f -> f.term(t -> t.field("rank").value(rank)));
+								}
+								return b;
+							})), Map.class);
 
-	        return mapSearchHits(searchResponse, classMapped);
+			return mapSearchHits(searchResponse, classMapped);
 
-	    } catch (Exception e) {
-	        logger.error("Error in filtered autoCompletion: {}", e.getMessage(), e);
-	    }
+		} catch (Exception e) {
+			logger.error("Error in filtered autoCompletion: {}", e.getMessage(), e);
+		}
 
-	    return new ArrayList<>();
+		return new ArrayList<>();
 	}
 
 	@Override
@@ -2640,8 +2624,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				? mapper.writeValueAsString(taxonomyData.getCommonNames())
 				: "null";
 		params.put("commonNames", JsonData.fromJson(commonNamesJson));
-		String synonymsJson = taxonomyData.getSynonyms() != null
-				? mapper.writeValueAsString(taxonomyData.getSynonyms())
+		String synonymsJson = taxonomyData.getSynonyms() != null ? mapper.writeValueAsString(taxonomyData.getSynonyms())
 				: "null";
 		params.put("synonyms", JsonData.fromJson(synonymsJson));
 
@@ -2651,7 +2634,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				.lang(ScriptLanguage.Painless).params(params));
 
 		UpdateByQueryRequest updateByQueryRequest = UpdateByQueryRequest.of(u -> u.index("extended_species")
-				.conflicts(Conflicts.Proceed).waitForCompletion(false).script(speciesScript).query(speciesQuery));
+				.conflicts(Conflicts.Proceed).waitForCompletion(true).script(speciesScript).query(speciesQuery));
 
 		logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
 

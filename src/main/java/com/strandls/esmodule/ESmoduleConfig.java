@@ -42,13 +42,12 @@ public class ESmoduleConfig {
 	public static int getInt(String key) {
 		return config.getInt(key);
 	}
-	
+
 	public static String fetchFileAsString(String fileName) throws IOException {
-        InputStream in = Thread.currentThread().getContextClassLoader()
-                .getResourceAsStream(fileName);
-        if (in == null) {
-            throw new IOException("File not found in classpath: " + fileName);
-        }
-        return IOUtils.toString(new InputStreamReader(in));
-    }
+		InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(fileName);
+		if (in == null) {
+			throw new IOException("File not found in classpath: " + fileName);
+		}
+		return IOUtils.toString(new InputStreamReader(in));
+	}
 }

@@ -292,9 +292,9 @@ public interface ElasticSearchService {
 	 */
 	<T> List<T> autoCompletion(String index, String type, String field, String text, String filterField, Integer filter,
 			Class<T> classMapped);
-	
-	<T> List<T> autoCompletion(String elasticIndex, String elasticType, String field,
-			String fieldText, String rank, Class classMapped);
+
+	<T> List<T> autoCompletion(String elasticIndex, String elasticType, String field, String fieldText, String rank,
+			Class classMapped);
 
 	/**
 	 * @param <T>
@@ -377,11 +377,12 @@ public interface ElasticSearchService {
 			throws IOException;
 
 	public MapResponse autocompleteSpeciesContributors(String index, String type, String name) throws IOException;
-	
-	public void asyncUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery, Query speciesQuery) throws IOException;
-	
+
+	public void asyncUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery, Query speciesQuery)
+			throws IOException;
+
 	public void observationUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery) throws IOException;
-	
+
 	public void speciesUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query speciesQuery) throws IOException;
 
 	MapQueryResponse bulkDelete(String index, String type, List<String> documentIds) throws IOException;

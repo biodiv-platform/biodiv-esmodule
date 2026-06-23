@@ -965,8 +965,6 @@ public class ESController {
 
 			return Response.status(Status.OK).entity("Async update initiated successfully").build();
 		} catch (Exception e) {
-			// Log the exception properly
-			e.printStackTrace(); // Replace with proper logging: logger.error("Error in async update", e);
 			return Response.status(Status.BAD_REQUEST).entity("Failed to initiate async update: " + e.getMessage())
 					.build();
 		}
@@ -1003,8 +1001,6 @@ public class ESController {
 
 			return Response.status(Status.OK).entity("Async update initiated successfully").build();
 		} catch (Exception e) {
-			// Log the exception properly
-			e.printStackTrace(); // Replace with proper logging: logger.error("Error in async update", e);
 			return Response.status(Status.BAD_REQUEST).entity("Failed to initiate async update: " + e.getMessage())
 					.build();
 		}
@@ -1024,53 +1020,53 @@ public class ESController {
 
 			// 1. Target ID conditions
 			shouldClauses.add(
-			    TermQuery.of(t -> t.field("taxonomyDefinition.id").value(FieldValue.of(taxonomyData.getTargetId())))
-			        ._toQuery());
+					TermQuery.of(t -> t.field("taxonomyDefinition.id").value(FieldValue.of(taxonomyData.getTargetId())))
+							._toQuery());
 			shouldClauses.add(TermQuery
-			    .of(t -> t.field("breadCrumbs.id").value(FieldValue.of(taxonomyData.getTargetId())))._toQuery());
+					.of(t -> t.field("breadCrumbs.id").value(FieldValue.of(taxonomyData.getTargetId())))._toQuery());
 			shouldClauses.add(TermQuery
-			    .of(t -> t.field("taxonomicNames.synonyms.id").value(FieldValue.of(taxonomyData.getTargetId())))
-			    ._toQuery());
+					.of(t -> t.field("taxonomicNames.synonyms.id").value(FieldValue.of(taxonomyData.getTargetId())))
+					._toQuery());
 
 			// 2. New ID condition
 			if (taxonomyData.getNewId() != null) {
-			    shouldClauses.add(TermQuery
-			        .of(t -> t.field("taxonomyDefinition.id").value(FieldValue.of(taxonomyData.getNewId())))
-			        ._toQuery());
+				shouldClauses.add(TermQuery
+						.of(t -> t.field("taxonomyDefinition.id").value(FieldValue.of(taxonomyData.getNewId())))
+						._toQuery());
 			}
 
 			// 3. Transfer Synonym IDs conditions
 			if (taxonomyData.getTransferSynonymIds() != null && !taxonomyData.getTransferSynonymIds().isEmpty()) {
-			    List<FieldValue> transferSynonymIdValues = taxonomyData.getTransferSynonymIds().stream()
-			        .map(FieldValue::of)
-			        .collect(Collectors.toList());
-			    
-			    // Documents whose own taxonomyDefinition.id is in transferSynonymIds
-			    shouldClauses.add(TermsQuery.of(t -> t.field("taxonomyDefinition.id")
-			        .terms(TermsQueryField.of(f -> f.value(transferSynonymIdValues))))._toQuery());
-			    
-			    // Documents that have transferSynonymIds as synonyms
-			    shouldClauses.add(TermsQuery.of(t -> t.field("taxonomicNames.synonyms.id")
-			        .terms(TermsQueryField.of(f -> f.value(transferSynonymIdValues))))._toQuery());
+				List<FieldValue> transferSynonymIdValues = taxonomyData.getTransferSynonymIds().stream()
+						.map(FieldValue::of).collect(Collectors.toList());
+
+				// Documents whose own taxonomyDefinition.id is in transferSynonymIds
+				shouldClauses.add(TermsQuery.of(t -> t.field("taxonomyDefinition.id")
+						.terms(TermsQueryField.of(f -> f.value(transferSynonymIdValues))))._toQuery());
+
+				// Documents that have transferSynonymIds as synonyms
+				shouldClauses.add(TermsQuery.of(t -> t.field("taxonomicNames.synonyms.id")
+						.terms(TermsQueryField.of(f -> f.value(transferSynonymIdValues))))._toQuery());
 			}
 
 			// 4. Bulk IDs conditions (NEW)
 			if (taxonomyData.getBulkIds() != null && !taxonomyData.getBulkIds().isEmpty()) {
-			    List<FieldValue> bulkIdValues = taxonomyData.getBulkIds().stream()
-			        .map(FieldValue::of)
-			        .collect(Collectors.toList());
-			    
-			    // Documents whose own taxonomyDefinition.id is in bulkIds
-			    shouldClauses.add(TermsQuery.of(t -> t.field("taxonomyDefinition.id")
-			        .terms(TermsQueryField.of(f -> f.value(bulkIdValues))))._toQuery());
-			    
-			    // Documents that have bulkIds as synonyms
-			    shouldClauses.add(TermsQuery.of(t -> t.field("taxonomicNames.synonyms.id")
-			        .terms(TermsQueryField.of(f -> f.value(bulkIdValues))))._toQuery());
-			    
-			    // Documents whose breadcrumbs contain bulkIds
-			    shouldClauses.add(TermsQuery.of(t -> t.field("breadCrumbs.id")
-			        .terms(TermsQueryField.of(f -> f.value(bulkIdValues))))._toQuery());
+				List<FieldValue> bulkIdValues = taxonomyData.getBulkIds().stream().map(FieldValue::of)
+						.collect(Collectors.toList());
+
+				// Documents whose own taxonomyDefinition.id is in bulkIds
+				shouldClauses.add(TermsQuery
+						.of(t -> t.field("taxonomyDefinition.id").terms(TermsQueryField.of(f -> f.value(bulkIdValues))))
+						._toQuery());
+
+				// Documents that have bulkIds as synonyms
+				shouldClauses.add(TermsQuery.of(t -> t.field("taxonomicNames.synonyms.id")
+						.terms(TermsQueryField.of(f -> f.value(bulkIdValues))))._toQuery());
+
+				// Documents whose breadcrumbs contain bulkIds
+				shouldClauses.add(TermsQuery
+						.of(t -> t.field("breadCrumbs.id").terms(TermsQueryField.of(f -> f.value(bulkIdValues))))
+						._toQuery());
 			}
 
 			Query speciesQuery = BoolQuery.of(b -> b.should(shouldClauses).minimumShouldMatch("1"))._toQuery();
@@ -1079,8 +1075,6 @@ public class ESController {
 
 			return Response.status(Status.OK).entity("Async update initiated successfully").build();
 		} catch (Exception e) {
-			// Log the exception properly
-			e.printStackTrace(); // Replace with proper logging: logger.error("Error in async update", e);
 			return Response.status(Status.BAD_REQUEST).entity("Failed to initiate async update: " + e.getMessage())
 					.build();
 		}

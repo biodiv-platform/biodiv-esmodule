@@ -40,7 +40,7 @@ public class TaxonomyUpdateData {
 	public void setTargetId(Long targetId) {
 		this.targetId = targetId;
 	}
-	
+
 	public Long getRecoId() {
 		return recoId;
 	}
@@ -48,7 +48,7 @@ public class TaxonomyUpdateData {
 	public void setRecoId(Long recoId) {
 		this.recoId = recoId;
 	}
-	
+
 	public Long getSpeciesId() {
 		return speciesId;
 	}
@@ -96,7 +96,7 @@ public class TaxonomyUpdateData {
 	public void setCanonicalForm(String canonicalForm) {
 		this.canonicalForm = canonicalForm;
 	}
-	
+
 	public String getBinomialForm() {
 		return binomialForm;
 	}
@@ -120,7 +120,7 @@ public class TaxonomyUpdateData {
 	public void setTimestamp(String timestamp) {
 		this.timestamp = timestamp;
 	}
-	
+
 	public String getScientificName() {
 		return scientificName;
 	}
@@ -128,7 +128,7 @@ public class TaxonomyUpdateData {
 	public void setScientificName(String scientificName) {
 		this.scientificName = scientificName;
 	}
-	
+
 	public String getTitle() {
 		return title;
 	}
@@ -144,7 +144,7 @@ public class TaxonomyUpdateData {
 	public void setBreadCrumbs(List<Breadcrumb> breadCrumbs) {
 		this.breadCrumbs = breadCrumbs;
 	}
-	
+
 	public List<Breadcrumb> getAcceptedBreadCrumbs() {
 		return acceptedBreadCrumbs;
 	}
@@ -168,68 +168,68 @@ public class TaxonomyUpdateData {
 	public void setStatus(String status) {
 		this.status = status;
 	}
-	
-	public List<Long> getTransferSynonymIds(){
+
+	public List<Long> getTransferSynonymIds() {
 		return transferSynonymIds;
 	}
-	
+
 	public void setTransferSynonymIds(List<Long> transferSynonymIds) {
 		this.transferSynonymIds = transferSynonymIds;
 	}
-	
+
 	public Long getNewId() {
 		return newId;
 	}
-	
+
 	public void setNewId(Long newId) {
 		this.newId = newId;
 	}
-	
-	public List<Object> getCommonNames(){
+
+	public List<Object> getCommonNames() {
 		return commonNames;
 	}
-	
+
 	public void setCommonNames(List<Object> commonNames) {
 		this.commonNames = commonNames;
 	}
-	
-	public List<Object> getSynonyms(){
+
+	public List<Object> getSynonyms() {
 		return synonyms;
 	}
-	
+
 	public void setSynonyms(List<Object> synonyms) {
 		this.synonyms = synonyms;
 	}
-	
-	public List<Long> getBulkIds(){
+
+	public List<Long> getBulkIds() {
 		return bulkIds;
 	}
-	
+
 	public void setBulkIds(List<Long> bulkIds) {
 		this.bulkIds = bulkIds;
 	}
-	
-	public List<Long> getDeleteRecoIds(){
+
+	public List<Long> getDeleteRecoIds() {
 		return deleteRecoIds;
 	}
-	
+
 	public void setDeleteRecoIds(List<Long> deleteRecoIds) {
 		this.deleteRecoIds = deleteRecoIds;
 	}
-	
-	public List<Long> getTransferRecoIds(){
+
+	public List<Long> getTransferRecoIds() {
 		return transferRecoIds;
 	}
-	
+
 	public void setTransferRecoIds(List<Long> transferRecoIds) {
 		this.transferRecoIds = transferRecoIds;
 	}
-	
-	public List<Long> getDeleteSpeciesIds(){
+
+	public List<Long> getDeleteSpeciesIds() {
 		return deleteSpeciesIds;
 	}
-	
+
 	public void setDeleteSpeciesIds(List<Long> deleteSpeciesIds) {
 		this.deleteSpeciesIds = deleteSpeciesIds;
-	} 
+	}
 }
