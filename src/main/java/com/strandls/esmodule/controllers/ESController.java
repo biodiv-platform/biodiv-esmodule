@@ -929,10 +929,10 @@ public class ESController {
 	@Path("asyncUpdate")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
-	@Operation(summary = "fetch the observation uploaded freq by user", description = "Returns the maxvotedId freq")
+	@Operation(summary = "Async update for taxonomy changes", description = "Taxonomy propagation")
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
-			@ApiResponse(responseCode = "400", description = "unable to get the result") })
+			@ApiResponse(responseCode = "400", description = "unable to trigger taxonomy propagation") })
 	public Response updateAsync(TaxonomyUpdateData taxonomyData) {
 		try {
 			Query speciesQuery = BoolQuery.of(b -> b.should(
@@ -974,10 +974,10 @@ public class ESController {
 	@Path("observationUpdate")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
-	@Operation(summary = "fetch the observation uploaded freq by user", description = "Returns the maxvotedId freq")
+	@Operation(summary = "observation taxonomy propagation", description = "observation taxonomy propagation")
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
-			@ApiResponse(responseCode = "400", description = "unable to get the result") })
+			@ApiResponse(responseCode = "400", description = "unable to trigger propagation for observation") })
 	public Response updateObservation(TaxonomyUpdateData taxonomyData) {
 		try {
 			List<FieldValue> targetIds = Stream.concat(Stream.of(FieldValue.of(taxonomyData.getTargetId())),
