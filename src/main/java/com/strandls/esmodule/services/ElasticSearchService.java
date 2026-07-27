@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.strandls.esmodule.indexes.pojo.ElasticIndexes;
 import com.strandls.esmodule.indexes.pojo.ExtendedTaxonDefinition;
 import com.strandls.esmodule.models.AggregationResponse;
 import com.strandls.esmodule.models.AuthorUploadedObservationInfo;
@@ -20,11 +21,14 @@ import com.strandls.esmodule.models.MonthAggregation;
 import com.strandls.esmodule.models.ObservationInfo;
 import com.strandls.esmodule.models.ObservationLatLon;
 import com.strandls.esmodule.models.ObservationNearBy;
+import com.strandls.esmodule.models.TaxonomyUpdateData;
 import com.strandls.esmodule.models.UploadersInfo;
 import com.strandls.esmodule.models.query.MapBoolQuery;
 import com.strandls.esmodule.models.query.MapQuery;
 import com.strandls.esmodule.models.query.MapRangeQuery;
 import com.strandls.esmodule.models.query.MapSearchQuery;
+
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 
 /**
  * All search services supported by map app
@@ -289,6 +293,9 @@ public interface ElasticSearchService {
 	<T> List<T> autoCompletion(String index, String type, String field, String text, String filterField, Integer filter,
 			Class<T> classMapped);
 
+	<T> List<T> autoCompletion(String elasticIndex, String elasticType, String field, String fieldText, String rank,
+			Class classMapped);
+
 	/**
 	 * @param <T>
 	 * @param index
@@ -370,4 +377,13 @@ public interface ElasticSearchService {
 			throws IOException;
 
 	public MapResponse autocompleteSpeciesContributors(String index, String type, String name) throws IOException;
+
+	public void asyncUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery, Query speciesQuery)
+			throws IOException;
+
+	public void observationUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery) throws IOException;
+
+	public void speciesUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query speciesQuery) throws IOException;
+
+	MapQueryResponse bulkDelete(String index, String type, List<String> documentIds) throws IOException;
 }

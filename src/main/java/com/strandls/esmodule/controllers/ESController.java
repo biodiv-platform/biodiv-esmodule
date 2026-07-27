@@ -1,9 +1,12 @@
 package com.strandls.esmodule.controllers;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.strandls.esmodule.ApiConstants;
@@ -28,6 +31,7 @@ import com.strandls.esmodule.models.MonthAggregation;
 import com.strandls.esmodule.models.ObservationInfo;
 import com.strandls.esmodule.models.ObservationLatLon;
 import com.strandls.esmodule.models.ObservationNearBy;
+import com.strandls.esmodule.models.TaxonomyUpdateData;
 import com.strandls.esmodule.models.UploadersInfo;
 import com.strandls.esmodule.models.query.MapBoolQuery;
 import com.strandls.esmodule.models.query.MapRangeQuery;
@@ -36,6 +40,12 @@ import com.strandls.esmodule.services.ElasticAdminSearchService;
 import com.strandls.esmodule.services.ElasticSearchService;
 import com.strandls.esmodule.utils.UtilityMethods;
 
+import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
+import co.elastic.clients.elasticsearch._types.query_dsl.TermQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.TermsQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.TermsQueryField;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -190,6 +200,29 @@ public class ESController {
 			@PathParam("documentId") String documentId) {
 		try {
 			return elasticSearchService.delete(index, type, documentId);
+		} catch (IOException e) {
+			throw new WebApplicationException(
+					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
+		}
+	}
+
+	@DELETE
+	@Path(ApiConstants.DATA + "/{index}/{type}/bulk")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Bulk Delete Documents", description = "Returns Success or Failure")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = MapQueryResponse.class))),
+			@ApiResponse(responseCode = "400", description = "Bad Request - Empty document IDs list"),
+			@ApiResponse(responseCode = "500", description = "ERROR") })
+	public MapQueryResponse bulkDelete(@PathParam("index") String index, @PathParam("type") String type,
+			List<String> documentIds) {
+		if (documentIds == null || documentIds.isEmpty()) {
+			throw new WebApplicationException(
+					Response.status(Status.BAD_REQUEST).entity("Document IDs list cannot be empty").build());
+		}
+		try {
+			return elasticSearchService.bulkDelete(index, type, documentIds);
 		} catch (IOException e) {
 			throw new WebApplicationException(
 					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
@@ -632,13 +665,17 @@ public class ESController {
 			@ApiResponse(responseCode = "500", description = "ERROR") })
 	public Response autoCompletion(@PathParam("index") String index, @PathParam("type") String type,
 			@QueryParam("field") String field, @QueryParam("text") String fieldText,
-			@QueryParam("groupId") String filterField, @QueryParam("group") Integer filter) {
+			@QueryParam("groupId") String filterField, @QueryParam("group") Integer filter,
+			@QueryParam("rank") String rank) {
 		String elasticIndex = utilityMethods.getEsIndexConstants(index);
 		String elasticType = utilityMethods.getEsIndexTypeConstant(type);
 		try {
 			List<? extends ElasticIndexes> records = null;
-			if (filter == null) {
+			if (filter == null && rank == null) {
 				records = elasticSearchService.autoCompletion(elasticIndex, elasticType, field, fieldText,
+						utilityMethods.getClass(index));
+			} else if (rank != null) {
+				records = elasticSearchService.autoCompletion(elasticIndex, elasticType, field, fieldText, rank,
 						utilityMethods.getClass(index));
 			} else {
 				records = elasticSearchService.autoCompletion(elasticIndex, elasticType, field, fieldText, filterField,
@@ -887,4 +924,160 @@ public class ESController {
 			return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
 		}
 	}
+
+	@POST
+	@Path("asyncUpdate")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Async update for taxonomy changes", description = "Taxonomy propagation")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
+			@ApiResponse(responseCode = "400", description = "unable to trigger taxonomy propagation") })
+	public Response updateAsync(TaxonomyUpdateData taxonomyData) {
+		try {
+			Query speciesQuery = BoolQuery.of(b -> b.should(
+					TermQuery.of(t -> t.field("taxonomyDefinition.id").value(FieldValue.of(taxonomyData.getTargetId())))
+							._toQuery(),
+					TermQuery.of(t -> t.field("breadCrumbs.id").value(FieldValue.of(taxonomyData.getTargetId())))
+							._toQuery(),
+					TermQuery.of(
+							t -> t.field("taxonomicNames.synonyms.id").value(FieldValue.of(taxonomyData.getTargetId())))
+							._toQuery())
+					.minimumShouldMatch("1"))._toQuery();
+			List<FieldValue> targetIds = Stream.concat(Stream.of(FieldValue.of(taxonomyData.getTargetId())),
+					Stream.concat(
+							taxonomyData.getTransferSynonymIds() != null
+									? taxonomyData.getTransferSynonymIds().stream().map(FieldValue::of)
+									: Stream.empty(),
+							taxonomyData.getBulkIds() != null ? taxonomyData.getBulkIds().stream().map(FieldValue::of)
+									: Stream.empty()))
+					.distinct().collect(Collectors.toList());
+			Query filterQuery = BoolQuery
+					.of(b -> b
+							.should(TermsQuery.of(t -> t.field("max_voted_reco.hierarchy.taxon_id")
+									.terms(TermsQueryField.of(f -> f.value(targetIds))))._toQuery(),
+									TermsQuery.of(t -> t.field("all_reco_vote.scientific_name.taxon_detail.id")
+											.terms(TermsQueryField.of(f -> f.value(targetIds))))._toQuery())
+							.minimumShouldMatch("1"))
+					._toQuery();
+
+			elasticSearchService.asyncUpdateByTaxonId(taxonomyData, filterQuery, speciesQuery);
+
+			return Response.status(Status.OK).entity("Async update initiated successfully").build();
+		} catch (Exception e) {
+			return Response.status(Status.BAD_REQUEST).entity("Failed to initiate async update: " + e.getMessage())
+					.build();
+		}
+	}
+
+	@POST
+	@Path("observationUpdate")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "observation taxonomy propagation", description = "observation taxonomy propagation")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
+			@ApiResponse(responseCode = "400", description = "unable to trigger propagation for observation") })
+	public Response updateObservation(TaxonomyUpdateData taxonomyData) {
+		try {
+			List<FieldValue> targetIds = Stream.concat(Stream.of(FieldValue.of(taxonomyData.getTargetId())),
+					Stream.concat(
+							taxonomyData.getTransferSynonymIds() != null
+									? taxonomyData.getTransferSynonymIds().stream().map(FieldValue::of)
+									: Stream.empty(),
+							taxonomyData.getBulkIds() != null ? taxonomyData.getBulkIds().stream().map(FieldValue::of)
+									: Stream.empty()))
+					.distinct().collect(Collectors.toList());
+			Query filterQuery = BoolQuery
+					.of(b -> b
+							.should(TermsQuery.of(t -> t.field("max_voted_reco.hierarchy.taxon_id")
+									.terms(TermsQueryField.of(f -> f.value(targetIds))))._toQuery(),
+									TermsQuery.of(t -> t.field("all_reco_vote.scientific_name.taxon_detail.id")
+											.terms(TermsQueryField.of(f -> f.value(targetIds))))._toQuery())
+							.minimumShouldMatch("1"))
+					._toQuery();
+
+			elasticSearchService.observationUpdateByTaxonId(taxonomyData, filterQuery);
+
+			return Response.status(Status.OK).entity("Async update initiated successfully").build();
+		} catch (Exception e) {
+			return Response.status(Status.BAD_REQUEST).entity("Failed to initiate async update: " + e.getMessage())
+					.build();
+		}
+	}
+
+	@POST
+	@Path("speciesUpdate")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "fetch the observation uploaded freq by user", description = "Returns the maxvotedId freq")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
+			@ApiResponse(responseCode = "400", description = "unable to get the result") })
+	public Response updateSpecies(TaxonomyUpdateData taxonomyData) {
+		try {
+			List<Query> shouldClauses = new ArrayList<>();
+
+			// 1. Target ID conditions
+			shouldClauses.add(
+					TermQuery.of(t -> t.field("taxonomyDefinition.id").value(FieldValue.of(taxonomyData.getTargetId())))
+							._toQuery());
+			shouldClauses.add(TermQuery
+					.of(t -> t.field("breadCrumbs.id").value(FieldValue.of(taxonomyData.getTargetId())))._toQuery());
+			shouldClauses.add(TermQuery
+					.of(t -> t.field("taxonomicNames.synonyms.id").value(FieldValue.of(taxonomyData.getTargetId())))
+					._toQuery());
+
+			// 2. New ID condition
+			if (taxonomyData.getNewId() != null) {
+				shouldClauses.add(TermQuery
+						.of(t -> t.field("taxonomyDefinition.id").value(FieldValue.of(taxonomyData.getNewId())))
+						._toQuery());
+			}
+
+			// 3. Transfer Synonym IDs conditions
+			if (taxonomyData.getTransferSynonymIds() != null && !taxonomyData.getTransferSynonymIds().isEmpty()) {
+				List<FieldValue> transferSynonymIdValues = taxonomyData.getTransferSynonymIds().stream()
+						.map(FieldValue::of).collect(Collectors.toList());
+
+				// Documents whose own taxonomyDefinition.id is in transferSynonymIds
+				shouldClauses.add(TermsQuery.of(t -> t.field("taxonomyDefinition.id")
+						.terms(TermsQueryField.of(f -> f.value(transferSynonymIdValues))))._toQuery());
+
+				// Documents that have transferSynonymIds as synonyms
+				shouldClauses.add(TermsQuery.of(t -> t.field("taxonomicNames.synonyms.id")
+						.terms(TermsQueryField.of(f -> f.value(transferSynonymIdValues))))._toQuery());
+			}
+
+			// 4. Bulk IDs conditions (NEW)
+			if (taxonomyData.getBulkIds() != null && !taxonomyData.getBulkIds().isEmpty()) {
+				List<FieldValue> bulkIdValues = taxonomyData.getBulkIds().stream().map(FieldValue::of)
+						.collect(Collectors.toList());
+
+				// Documents whose own taxonomyDefinition.id is in bulkIds
+				shouldClauses.add(TermsQuery
+						.of(t -> t.field("taxonomyDefinition.id").terms(TermsQueryField.of(f -> f.value(bulkIdValues))))
+						._toQuery());
+
+				// Documents that have bulkIds as synonyms
+				shouldClauses.add(TermsQuery.of(t -> t.field("taxonomicNames.synonyms.id")
+						.terms(TermsQueryField.of(f -> f.value(bulkIdValues))))._toQuery());
+
+				// Documents whose breadcrumbs contain bulkIds
+				shouldClauses.add(TermsQuery
+						.of(t -> t.field("breadCrumbs.id").terms(TermsQueryField.of(f -> f.value(bulkIdValues))))
+						._toQuery());
+			}
+
+			Query speciesQuery = BoolQuery.of(b -> b.should(shouldClauses).minimumShouldMatch("1"))._toQuery();
+
+			elasticSearchService.speciesUpdateByTaxonId(taxonomyData, speciesQuery);
+
+			return Response.status(Status.OK).entity("Async update initiated successfully").build();
+		} catch (Exception e) {
+			return Response.status(Status.BAD_REQUEST).entity("Failed to initiate async update: " + e.getMessage())
+					.build();
+		}
+	}
+
 }

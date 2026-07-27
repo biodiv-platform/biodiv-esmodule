@@ -21,6 +21,7 @@ import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 // ES 9 Client and Core
@@ -36,9 +37,11 @@ import co.elastic.clients.elasticsearch.indices.get_mapping.IndexMappingRecord;
 import co.elastic.clients.json.JsonData;
 import co.elastic.clients.json.JsonpMapper;
 import co.elastic.clients.util.NamedValue;
+import co.elastic.clients.elasticsearch._types.Script;
 
 import com.strandls.es.ElasticSearchClient;
 import com.strandls.esmodule.Constants;
+import com.strandls.esmodule.ESmoduleConfig;
 import com.strandls.esmodule.indexes.pojo.ExtendedTaxonDefinition;
 import com.strandls.esmodule.models.AggregationResponse;
 import com.strandls.esmodule.models.AuthorUploadedObservationInfo;
@@ -64,6 +67,7 @@ import com.strandls.esmodule.models.ObservationMapInfo;
 import com.strandls.esmodule.models.ObservationNearBy;
 import com.strandls.esmodule.models.SimilarObservation;
 import com.strandls.esmodule.models.SpeciesGroup;
+import com.strandls.esmodule.models.TaxonomyUpdateData;
 import com.strandls.esmodule.models.TraitValue;
 import com.strandls.esmodule.models.Traits;
 import com.strandls.esmodule.models.UploadersInfo;
@@ -118,7 +122,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		co.elastic.clients.elasticsearch.core.IndexResponse response = client.getClient()
 				.index(i -> i.index(index).id(documentId).document(docMap));
 
-		MapQueryStatus queryStatus = MapQueryStatus.valueOf(response.result().name());
+		MapQueryStatus queryStatus = MapQueryStatus.valueOf(response.result().name().toUpperCase());
 
 		logger.info("Created index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
 				queryStatus);
@@ -170,7 +174,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		co.elastic.clients.elasticsearch.core.UpdateResponse<Map> updateResponse = client.getClient()
 				.update(u -> u.index(index).id(documentId).doc(document), Map.class);
-		MapQueryStatus queryStatus = MapQueryStatus.valueOf(updateResponse.result().name());
+		MapQueryStatus queryStatus = MapQueryStatus.valueOf(updateResponse.result().name().toUpperCase());
 
 		logger.info("Updated index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
 				queryStatus);
@@ -194,10 +198,43 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		logger.info("Trying to delete index: {}, type: {} & id: {}", indexParam, typeParam, documentIdParam);
 
 		DeleteResponse deleteResponse = client.getClient().delete(d -> d.index(index).id(documentId));
-		MapQueryStatus queryStatus = MapQueryStatus.valueOf(deleteResponse.result().name());
+		MapQueryStatus queryStatus = MapQueryStatus.valueOf(deleteResponse.result().name().toUpperCase());
 
 		logger.info("Deleted index: {}, type: {} & id: {} with status {}", indexParam, typeParam, documentIdParam,
 				queryStatus);
+
+		return new MapQueryResponse(queryStatus, "");
+	}
+
+	@Override
+	public MapQueryResponse bulkDelete(String index, String type, List<String> documentIds) throws IOException {
+		String indexParam = index.replaceAll("[\n\r\t]", "_");
+		String typeParam = type.replaceAll("[\n\r\t]", "_");
+
+		logger.info("Trying to bulk delete index: {}, type: {} & ids: {}", indexParam, typeParam, documentIds.size());
+
+		List<BulkOperation> bulkOperations = documentIds.stream()
+				.map(documentId -> BulkOperation.of(op -> op.delete(d -> d.index(index).id(documentId))))
+				.collect(Collectors.toList());
+
+		BulkRequest bulkRequest = BulkRequest.of(b -> b.index(index).operations(bulkOperations));
+
+		BulkResponse bulkResponse = client.getClient().bulk(bulkRequest);
+
+		if (bulkResponse.errors()) {
+			List<String> failedIds = bulkResponse.items().stream().filter(item -> item.error() != null)
+					.map(BulkResponseItem::id).collect(Collectors.toList());
+
+			logger.error("Bulk delete partially failed for index: {}, type: {}, failed IDs: {}", indexParam, typeParam,
+					failedIds);
+
+			return new MapQueryResponse(MapQueryStatus.NOT_FOUND, "Failed IDs: " + failedIds);
+		}
+
+		MapQueryStatus queryStatus = MapQueryStatus.DELETED;
+
+		logger.info("Bulk deleted index: {}, type: {} & ids count: {} with status {}", indexParam, typeParam,
+				documentIds.size(), queryStatus);
 
 		return new MapQueryResponse(queryStatus, "");
 	}
@@ -279,7 +316,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				failureReason.append(item.error().reason());
 				queryStatus = MapQueryStatus.ERROR;
 			} else {
-				queryStatus = MapQueryStatus.valueOf(item.result());
+				queryStatus = MapQueryStatus.valueOf(item.result().toUpperCase());
 			}
 
 			logger.info(" For index: {}, type: {}, bulk upload id: {}, the status is {}", indexParam, typeParam,
@@ -318,7 +355,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 				failureReason.append(item.error().reason());
 				queryStatus = MapQueryStatus.ERROR;
 			} else {
-				queryStatus = MapQueryStatus.valueOf(item.result());
+				queryStatus = MapQueryStatus.valueOf(item.result().toUpperCase());
 			}
 
 			logger.info(" For index: {}, type: {}, bulk update id: {}, the status is {}", indexParam, typeParam,
@@ -334,11 +371,11 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	private MapResponse querySearch(String index, Query query, MapSearchParams searchParams, String geoAggregationField,
 			Integer geoAggegationPrecision) throws IOException {
 
-		SearchResponse<ObjectNode> searchResponse = client.getClient().search(s -> {
+		SearchRequest searchRequest = SearchRequest.of(s -> {
 			s.index(index).trackTotalHits(t -> t.enabled(true));
 
 			if (query != null) {
-				s.query(query); // Reusing the immutable query
+				s.query(query);
 			}
 
 			if (searchParams.getFrom() != null)
@@ -346,11 +383,25 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			if (searchParams.getLimit() != null)
 				s.size(searchParams.getLimit());
 
-			if (searchParams.getSortOn() != null) {
+			if (searchParams.getSortOnList() != null && !searchParams.getSortOnList().isEmpty()) {
 				SortOrder order = (searchParams.getSortType() != null && MapSortType.ASC == searchParams.getSortType())
 						? SortOrder.Asc
 						: SortOrder.Desc;
-				s.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(order)));
+				for (String sortField : searchParams.getSortOnList()) {
+					s.sort(so -> so.field(f -> f.field(sortField).order(order).missing("_last")));
+				}
+			} else if (searchParams.getSortOn() != null) {
+				SortOrder order = (searchParams.getSortType() != null && MapSortType.ASC == searchParams.getSortType())
+						? SortOrder.Asc
+						: SortOrder.Desc;
+				s.sort(so -> so.field(f -> f.field(searchParams.getSortOn()).order(order).missing("_last")));
+			}
+
+			if (searchParams.getSearchAfterList() != null && !searchParams.getSearchAfterList().isEmpty()) {
+				s.searchAfter(
+						searchParams.getSearchAfterList().stream().map(FieldValue::of).collect(Collectors.toList()));
+			} else if (searchParams.getSearchAfter() != null) {
+				s.searchAfter(FieldValue.of(searchParams.getSearchAfter()));
 			}
 
 			if (geoAggregationField != null) {
@@ -358,7 +409,11 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			}
 
 			return s;
-		}, ObjectNode.class);
+		});
+
+		logger.info("ES Request: {}", searchRequest.toString());
+
+		SearchResponse<ObjectNode> searchResponse = client.getClient().search(searchRequest, ObjectNode.class);
 
 		List<MapDocument> result = new ArrayList<>();
 		long totalHits = (searchResponse.hits().total() != null) ? searchResponse.hits().total().value() : 0;
@@ -1396,6 +1451,32 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 	}
 
 	@Override
+	public <T> List<T> autoCompletion(String index, String type, String field, String fieldText, String rank,
+			Class classMapped) {
+		String normalizedField = normalizeAutocompleteField(field);
+
+		try {
+			SearchResponse<Map> searchResponse = client.getClient()
+					.search(s -> s.index(index).size(10000).source(
+							src -> src.filter(f -> f.excludes(Arrays.asList(Constants.TIMESTAMP, Constants.VERSION))))
+							.query(q -> q.bool(b -> {
+								b.must(m -> m.matchPhrase(mp -> mp.field(normalizedField).query(fieldText)));
+								if (rank != null) {
+									b.filter(f -> f.term(t -> t.field("rank").value(rank)));
+								}
+								return b;
+							})), Map.class);
+
+			return mapSearchHits(searchResponse, classMapped);
+
+		} catch (Exception e) {
+			logger.error("Error in filtered autoCompletion: {}", e.getMessage(), e);
+		}
+
+		return new ArrayList<>();
+	}
+
+	@Override
 	public <T> List<T> autoCompletion(String index, String type, String field, String text, String filterField,
 			Integer filter, Class<T> classMapped) {
 
@@ -2358,8 +2439,228 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		return new MapResponse(result, totalHits, null);
 	}
 
+	public void asyncUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery, Query speciesQuery)
+			throws IOException {
+
+		Map<String, JsonData> params = new HashMap<>();
+		params.put("targetId", toJsonData(taxonomyData.getTargetId()));
+		params.put("recoId", toJsonData(taxonomyData.getRecoId()));
+		params.put("speciesId", toJsonData(taxonomyData.getSpeciesId()));
+		params.put("scientificName", toJsonData(taxonomyData.getScientificName()));
+		params.put("title", toJsonData(taxonomyData.getTitle()));
+		params.put("binomialForm", toJsonData(taxonomyData.getBinomialForm()));
+		params.put("name", toJsonData(taxonomyData.getName()));
+		params.put("normalized_name", toJsonData(taxonomyData.getNormalizedName()));
+		params.put("old_name", toJsonData(taxonomyData.getOldName()));
+		params.put("italicised_form", toJsonData(taxonomyData.getItalicisedForm()));
+		params.put("canonical_form", toJsonData(taxonomyData.getCanonicalForm()));
+		params.put("position", toJsonData(taxonomyData.getPosition()));
+		params.put("timestamp", toJsonData(taxonomyData.getTimestamp()));
+		params.put("rank", toJsonData(taxonomyData.getRank()));
+		params.put("status", toJsonData(taxonomyData.getStatus()));
+		params.put("newId", toJsonData(taxonomyData.getNewId()));
+
+		// breadCrumbs and transferSynonymIds
+		ObjectMapper mapper = new ObjectMapper();
+		String breadCrumbsJson = taxonomyData.getBreadCrumbs() != null
+				? mapper.writeValueAsString(taxonomyData.getBreadCrumbs())
+				: "null";
+		String transferSynonymIdsJson = taxonomyData.getTransferSynonymIds() != null
+				? mapper.writeValueAsString(taxonomyData.getTransferSynonymIds())
+				: "null";
+		String bulkIdsJson = taxonomyData.getBulkIds() != null ? mapper.writeValueAsString(taxonomyData.getBulkIds())
+				: "null";
+		String deleteRecoIdsJson = taxonomyData.getDeleteRecoIds() != null
+				? mapper.writeValueAsString(taxonomyData.getDeleteRecoIds())
+				: "null";
+		String transferRecoIdsJson = taxonomyData.getTransferRecoIds() != null
+				? mapper.writeValueAsString(taxonomyData.getTransferRecoIds())
+				: "null";
+		String deleteSpeciesIdsJson = taxonomyData.getDeleteSpeciesIds() != null
+				? mapper.writeValueAsString(taxonomyData.getDeleteSpeciesIds())
+				: "null";
+		params.put("breadCrumbs", JsonData.fromJson(breadCrumbsJson));
+		params.put("transferSynonymIds", JsonData.fromJson(transferSynonymIdsJson));
+		params.put("bulkIds", JsonData.fromJson(bulkIdsJson));
+		params.put("deleteRecoIds", JsonData.fromJson(deleteRecoIdsJson));
+		params.put("transferRecoIds", JsonData.fromJson(transferRecoIdsJson));
+		params.put("deleteSpeciesIds", JsonData.fromJson(deleteSpeciesIdsJson));
+		String commonNamesJson = taxonomyData.getCommonNames() != null
+				? mapper.writeValueAsString(taxonomyData.getCommonNames())
+				: "null";
+		params.put("commonNames", JsonData.fromJson(commonNamesJson));
+
+		String painlessScript = ESmoduleConfig.fetchFileAsString("scripts/updateObservationTaxonomy.painless");
+
+		Script script = Script.of(
+				s -> s.source(src -> src.scriptString(painlessScript)).lang(ScriptLanguage.Painless).params(params));
+
+		UpdateByQueryRequest updateByQueryRequest = UpdateByQueryRequest.of(u -> u.index("extended_observation")
+				.conflicts(Conflicts.Proceed).waitForCompletion(false).script(script).query(filterQuery));
+
+		logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
+
+		UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
+		logger.info("UpdateByQuery Observation task ID: {}", response.task());
+
+		String painlessSpeciesScript = ESmoduleConfig.fetchFileAsString("scripts/updateSpeciesTaxonomy.painless");
+
+		Script speciesScript = Script.of(s -> s.source(src -> src.scriptString(painlessSpeciesScript))
+				.lang(ScriptLanguage.Painless).params(params));
+
+		updateByQueryRequest = UpdateByQueryRequest.of(u -> u.index("extended_species").conflicts(Conflicts.Proceed)
+				.waitForCompletion(false).script(speciesScript).query(speciesQuery));
+
+		logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
+
+		response = client.getClient().updateByQuery(updateByQueryRequest);
+		logger.info("UpdateByQuery Species task ID: {}", response.task());
+	}
+
+	public void observationUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query filterQuery) throws IOException {
+
+		Map<String, JsonData> params = new HashMap<>();
+		params.put("targetId", toJsonData(taxonomyData.getTargetId()));
+		params.put("recoId", toJsonData(taxonomyData.getRecoId()));
+		params.put("speciesId", toJsonData(taxonomyData.getSpeciesId()));
+		params.put("scientificName", toJsonData(taxonomyData.getScientificName()));
+		params.put("title", toJsonData(taxonomyData.getTitle()));
+		params.put("binomialForm", toJsonData(taxonomyData.getBinomialForm()));
+		params.put("name", toJsonData(taxonomyData.getName()));
+		params.put("normalized_name", toJsonData(taxonomyData.getNormalizedName()));
+		params.put("old_name", toJsonData(taxonomyData.getOldName()));
+		params.put("italicised_form", toJsonData(taxonomyData.getItalicisedForm()));
+		params.put("canonical_form", toJsonData(taxonomyData.getCanonicalForm()));
+		params.put("position", toJsonData(taxonomyData.getPosition()));
+		params.put("timestamp", toJsonData(taxonomyData.getTimestamp()));
+		params.put("rank", toJsonData(taxonomyData.getRank()));
+		params.put("status", toJsonData(taxonomyData.getStatus()));
+		params.put("newId", toJsonData(taxonomyData.getNewId()));
+
+		// breadCrumbs and transferSynonymIds
+		ObjectMapper mapper = new ObjectMapper();
+		String breadCrumbsJson = taxonomyData.getBreadCrumbs() != null
+				? mapper.writeValueAsString(taxonomyData.getBreadCrumbs())
+				: "null";
+		String transferSynonymIdsJson = taxonomyData.getTransferSynonymIds() != null
+				? mapper.writeValueAsString(taxonomyData.getTransferSynonymIds())
+				: "null";
+		String bulkIdsJson = taxonomyData.getBulkIds() != null ? mapper.writeValueAsString(taxonomyData.getBulkIds())
+				: "null";
+		String deleteRecoIdsJson = taxonomyData.getDeleteRecoIds() != null
+				? mapper.writeValueAsString(taxonomyData.getDeleteRecoIds())
+				: "null";
+		String transferRecoIdsJson = taxonomyData.getTransferRecoIds() != null
+				? mapper.writeValueAsString(taxonomyData.getTransferRecoIds())
+				: "null";
+		String deleteSpeciesIdsJson = taxonomyData.getDeleteSpeciesIds() != null
+				? mapper.writeValueAsString(taxonomyData.getDeleteSpeciesIds())
+				: "null";
+		params.put("breadCrumbs", JsonData.fromJson(breadCrumbsJson));
+		params.put("transferSynonymIds", JsonData.fromJson(transferSynonymIdsJson));
+		params.put("bulkIds", JsonData.fromJson(bulkIdsJson));
+		params.put("deleteRecoIds", JsonData.fromJson(deleteRecoIdsJson));
+		params.put("transferRecoIds", JsonData.fromJson(transferRecoIdsJson));
+		params.put("deleteSpeciesIds", JsonData.fromJson(deleteSpeciesIdsJson));
+		String commonNamesJson = taxonomyData.getCommonNames() != null
+				? mapper.writeValueAsString(taxonomyData.getCommonNames())
+				: "null";
+		params.put("commonNames", JsonData.fromJson(commonNamesJson));
+
+		String painlessScript = ESmoduleConfig.fetchFileAsString("scripts/updateObservationTaxonomy.painless");
+
+		Script script = Script.of(
+				s -> s.source(src -> src.scriptString(painlessScript)).lang(ScriptLanguage.Painless).params(params));
+
+		UpdateByQueryRequest updateByQueryRequest = UpdateByQueryRequest.of(u -> u.index("extended_observation")
+				.conflicts(Conflicts.Proceed).waitForCompletion(false).script(script).query(filterQuery));
+
+		logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
+
+		UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
+		logger.info("UpdateByQuery Observation task ID: {}", response.task());
+	}
+
+	public void speciesUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query speciesQuery) throws IOException {
+
+		Map<String, JsonData> params = new HashMap<>();
+		params.put("targetId", toJsonData(taxonomyData.getTargetId()));
+		params.put("recoId", toJsonData(taxonomyData.getRecoId()));
+		params.put("speciesId", toJsonData(taxonomyData.getSpeciesId()));
+		params.put("scientificName", toJsonData(taxonomyData.getScientificName()));
+		params.put("title", toJsonData(taxonomyData.getTitle()));
+		params.put("binomialForm", toJsonData(taxonomyData.getBinomialForm()));
+		params.put("name", toJsonData(taxonomyData.getName()));
+		params.put("normalized_name", toJsonData(taxonomyData.getNormalizedName()));
+		params.put("old_name", toJsonData(taxonomyData.getOldName()));
+		params.put("italicised_form", toJsonData(taxonomyData.getItalicisedForm()));
+		params.put("canonical_form", toJsonData(taxonomyData.getCanonicalForm()));
+		params.put("position", toJsonData(taxonomyData.getPosition()));
+		params.put("timestamp", toJsonData(taxonomyData.getTimestamp()));
+		params.put("rank", toJsonData(taxonomyData.getRank()));
+		params.put("status", toJsonData(taxonomyData.getStatus()));
+		params.put("newId", toJsonData(taxonomyData.getNewId()));
+
+		// breadCrumbs and transferSynonymIds
+		ObjectMapper mapper = new ObjectMapper();
+		String breadCrumbsJson = taxonomyData.getBreadCrumbs() != null
+				? mapper.writeValueAsString(taxonomyData.getBreadCrumbs())
+				: "null";
+		String accpetedBreadCrumbsJson = taxonomyData.getAcceptedBreadCrumbs() != null
+				? mapper.writeValueAsString(taxonomyData.getAcceptedBreadCrumbs())
+				: "null";
+		String transferSynonymIdsJson = taxonomyData.getTransferSynonymIds() != null
+				? mapper.writeValueAsString(taxonomyData.getTransferSynonymIds())
+				: "null";
+		String bulkIdsJson = taxonomyData.getBulkIds() != null ? mapper.writeValueAsString(taxonomyData.getBulkIds())
+				: "null";
+		String deleteRecoIdsJson = taxonomyData.getDeleteRecoIds() != null
+				? mapper.writeValueAsString(taxonomyData.getDeleteRecoIds())
+				: "null";
+		String transferRecoIdsJson = taxonomyData.getTransferRecoIds() != null
+				? mapper.writeValueAsString(taxonomyData.getTransferRecoIds())
+				: "null";
+		String deleteSpeciesIdsJson = taxonomyData.getDeleteSpeciesIds() != null
+				? mapper.writeValueAsString(taxonomyData.getDeleteSpeciesIds())
+				: "null";
+		params.put("breadCrumbs", JsonData.fromJson(breadCrumbsJson));
+		params.put("acceptedBreadCrumbs", JsonData.fromJson(accpetedBreadCrumbsJson));
+		params.put("transferSynonymIds", JsonData.fromJson(transferSynonymIdsJson));
+		params.put("bulkIds", JsonData.fromJson(bulkIdsJson));
+		params.put("deleteRecoIds", JsonData.fromJson(deleteRecoIdsJson));
+		params.put("transferRecoIds", JsonData.fromJson(transferRecoIdsJson));
+		params.put("deleteSpeciesIds", JsonData.fromJson(deleteSpeciesIdsJson));
+		String commonNamesJson = taxonomyData.getCommonNames() != null
+				? mapper.writeValueAsString(taxonomyData.getCommonNames())
+				: "null";
+		params.put("commonNames", JsonData.fromJson(commonNamesJson));
+		String synonymsJson = taxonomyData.getSynonyms() != null ? mapper.writeValueAsString(taxonomyData.getSynonyms())
+				: "null";
+		params.put("synonyms", JsonData.fromJson(synonymsJson));
+
+		String painlessSpeciesScript = ESmoduleConfig.fetchFileAsString("scripts/updateSpeciesTaxonomy.painless");
+
+		Script speciesScript = Script.of(s -> s.source(src -> src.scriptString(painlessSpeciesScript))
+				.lang(ScriptLanguage.Painless).params(params));
+
+		UpdateByQueryRequest updateByQueryRequest = UpdateByQueryRequest.of(u -> u.index("extended_species")
+				.conflicts(Conflicts.Proceed).waitForCompletion(true).script(speciesScript).query(speciesQuery));
+
+		logger.info("UpdateByQueryRequest: {}", updateByQueryRequest.toString());
+
+		UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
+		logger.info("UpdateByQuery Species task ID: {}", response.task());
+	}
+
 	private String sanitize(String value) {
 		return value == null ? null : value.replaceAll("[\n\r\t]", "_");
+	}
+
+	private JsonData toJsonData(Object value) {
+		if (value == null) {
+			return JsonData.of(NullNode.getInstance());
+		}
+		return JsonData.of(value);
 	}
 
 }

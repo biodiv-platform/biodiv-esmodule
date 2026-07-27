@@ -1,5 +1,7 @@
 package com.strandls.esmodule.models;
 
+import java.util.List;
+
 /**
  * Search parameters for map query
  *
@@ -28,6 +30,12 @@ public class MapSearchParams {
 	 * the bounds in which the search is required
 	 */
 	private MapBoundParams mapBoundParams;
+
+	private String searchAfter;
+
+	private List<String> sortOnList;
+
+	private List<String> searchAfterList;
 
 	public MapSearchParams() {
 	}
@@ -90,10 +98,34 @@ public class MapSearchParams {
 		this.mapBoundParams = mapBoundParams;
 	}
 
+	public String getSearchAfter() {
+		return searchAfter;
+	}
+
+	public void setSearchAfter(String searchAfter) {
+		this.searchAfter = searchAfter;
+	}
+
+	public List<String> getSortOnList() {
+		return sortOnList;
+	}
+
+	public void setSortOnList(List<String> sortOnList) {
+		this.sortOnList = sortOnList;
+	}
+
+	public List<String> getSearchAfterList() {
+		return searchAfterList;
+	}
+
+	public void setSearchAfterList(List<String> searchAfterList) {
+		this.searchAfterList = searchAfterList;
+	}
+
 	@Override
 	public String toString() {
 		return "MapSearchParams [from=" + from + ", limit=" + limit + ", sortOn=" + sortOn + ", sortType=" + sortType
-				+ ", mapBoundParams=" + mapBoundParams + "]";
+				+ ", mapBoundParams=" + mapBoundParams + ", searchAfter=" + searchAfter + "]";
 	}
 
 }

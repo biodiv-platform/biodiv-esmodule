@@ -25,6 +25,7 @@ public class ExtendedTaxonDefinition implements ElasticIndexes {
 	private String canonical_form;
 	private String status;
 	private List<String> accepted_names;
+	private String tree_sort;
 
 	public ExtendedTaxonDefinition() {
 		super();
@@ -238,6 +239,14 @@ public class ExtendedTaxonDefinition implements ElasticIndexes {
 
 	public void setAccepted_names(List<String> accepted_names) {
 		this.accepted_names = accepted_names;
+	}
+
+	public String getTree_sort() {
+		return tree_sort;
+	}
+
+	public void setTree_sort(String tree_sort) {
+		this.tree_sort = tree_sort;
 	}
 
 }
