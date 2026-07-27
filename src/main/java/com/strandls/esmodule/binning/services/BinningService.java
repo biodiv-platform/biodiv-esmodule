@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package com.strandls.esmodule.binning.services;
 

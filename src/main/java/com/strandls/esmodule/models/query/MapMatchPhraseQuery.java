@@ -2,7 +2,7 @@ package com.strandls.esmodule.models.query;
 
 /**
  * This is to support elastic search match phrase query
- * 
+ *
  * @author mukund
  *
  */

@@ -5,17 +5,16 @@ import java.util.List;
 public class MapBoundParams {
 
 	private MapBounds bounds;
-	
+
 	private List<MapGeoPoint> polygon;
-	
+
 	private List<List<MapGeoPoint>> multipolygon;
 
-	
 	public MapBoundParams() {
 		super();
 	}
 
-	public MapBoundParams(MapBounds bounds, List<MapGeoPoint> polygon,List<List<MapGeoPoint>> multipolygon) {
+	public MapBoundParams(MapBounds bounds, List<MapGeoPoint> polygon, List<List<MapGeoPoint>> multipolygon) {
 		super();
 		this.bounds = bounds;
 		this.polygon = polygon;

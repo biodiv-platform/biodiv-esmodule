@@ -4,15 +4,16 @@ import java.util.List;
 
 /**
  * Query of the form that a key can have multiple values
- * 
+ *
  * @author mukund
  */
 public class MapBoolQuery extends MapQuery {
 
 	private List<Object> values;
 
-	public MapBoolQuery() {}
-	
+	public MapBoolQuery() {
+	}
+
 	public MapBoolQuery(String key, List<Object> values, String path) {
 		super(key, path);
 		this.values = values;

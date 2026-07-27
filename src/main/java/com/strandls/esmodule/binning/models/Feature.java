@@ -4,7 +4,7 @@ import java.util.Map;
 
 /**
  * A feature in {@link Geojson}
- * 
+ *
  * @author mukund
  *
  */

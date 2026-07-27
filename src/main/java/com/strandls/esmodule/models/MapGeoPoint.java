@@ -5,7 +5,8 @@ public class MapGeoPoint {
 	private double lat;
 	private double lon;
 
-	public MapGeoPoint() {}
+	public MapGeoPoint() {
+	}
 
 	public MapGeoPoint(double lat, double lon) {
 		this.lat = lat;

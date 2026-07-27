@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package com.strandls.esmodule.models;
 
@@ -13,7 +13,7 @@ public class Location {
 	private Double lon;
 
 	/**
-	 * 
+	 *
 	 */
 	public Location() {
 		super();

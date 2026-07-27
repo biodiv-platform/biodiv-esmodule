@@ -2,7 +2,7 @@ package com.strandls.esmodule.models;
 
 /**
  * A response to the query request made to map app
- * 
+ *
  * @author mukund
  */
 public class MapQueryResponse {
@@ -32,5 +32,5 @@ public class MapQueryResponse {
 	public void setMessage(String message) {
 		this.message = message;
 	}
-	
+
 }

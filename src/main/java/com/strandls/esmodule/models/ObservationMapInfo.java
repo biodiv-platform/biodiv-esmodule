@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package com.strandls.esmodule.models;
 
@@ -15,7 +15,7 @@ public class ObservationMapInfo {
 	private Double longitude;
 
 	/**
-	 * 
+	 *
 	 */
 	public ObservationMapInfo() {
 		super();

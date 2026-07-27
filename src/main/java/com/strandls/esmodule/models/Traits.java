@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package com.strandls.esmodule.models;
 
@@ -16,7 +16,7 @@ public class Traits {
 	private List<TraitValue> traitValues;
 
 	/**
-	 * 
+	 *
 	 */
 	public Traits() {
 		super();

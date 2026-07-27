@@ -1,8 +1,10 @@
 package com.strandls.esmodule.models;
 
+import java.util.List;
+
 /**
  * Search parameters for map query
- * 
+ *
  * @author mukund
  *
  */
@@ -29,7 +31,14 @@ public class MapSearchParams {
 	 */
 	private MapBoundParams mapBoundParams;
 
-    public MapSearchParams() {}
+	private String searchAfter;
+
+	private List<String> sortOnList;
+
+	private List<String> searchAfterList;
+
+	public MapSearchParams() {
+	}
 
 	public MapSearchParams(Integer from, Integer limit, String sortOn, MapSortType sortType) {
 		super();
@@ -39,7 +48,8 @@ public class MapSearchParams {
 		this.sortType = sortType;
 	}
 
-	public MapSearchParams(Integer from, Integer limit, String sortOn, MapSortType sortType, MapBoundParams mapBoundParams) {
+	public MapSearchParams(Integer from, Integer limit, String sortOn, MapSortType sortType,
+			MapBoundParams mapBoundParams) {
 		super();
 		this.from = from;
 		this.limit = limit;
@@ -88,10 +98,34 @@ public class MapSearchParams {
 		this.mapBoundParams = mapBoundParams;
 	}
 
+	public String getSearchAfter() {
+		return searchAfter;
+	}
+
+	public void setSearchAfter(String searchAfter) {
+		this.searchAfter = searchAfter;
+	}
+
+	public List<String> getSortOnList() {
+		return sortOnList;
+	}
+
+	public void setSortOnList(List<String> sortOnList) {
+		this.sortOnList = sortOnList;
+	}
+
+	public List<String> getSearchAfterList() {
+		return searchAfterList;
+	}
+
+	public void setSearchAfterList(List<String> searchAfterList) {
+		this.searchAfterList = searchAfterList;
+	}
+
 	@Override
 	public String toString() {
 		return "MapSearchParams [from=" + from + ", limit=" + limit + ", sortOn=" + sortOn + ", sortType=" + sortType
-				+ ", mapBoundParams=" + mapBoundParams + "]";
+				+ ", mapBoundParams=" + mapBoundParams + ", searchAfter=" + searchAfter + "]";
 	}
-	
+
 }

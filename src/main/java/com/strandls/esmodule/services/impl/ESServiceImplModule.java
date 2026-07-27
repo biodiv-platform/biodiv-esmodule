@@ -8,7 +8,7 @@ import com.strandls.esmodule.services.ElasticSearchService;
 
 /**
  * Guice binding module
- * 
+ *
  * @author mukund
  *
  */

@@ -2,36 +2,32 @@ package com.strandls.esmodule.controllers;
 
 import java.io.IOException;
 
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status;
-
-import javax.inject.Inject;
-
 import com.strandls.esmodule.ApiConstants;
 import com.strandls.esmodule.binning.models.GeojsonData;
 import com.strandls.esmodule.binning.servicesImpl.BinningServiceImpl;
 import com.strandls.esmodule.models.MapBounds;
 
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response.Status;
 
 /**
  * Controller for binning related services
- * 
- * @author mukund
- *
  */
-
-@Api("Binning Service")
+@Tag(name = "Binning Service", description = "Spatial binning API")
 @Path(ApiConstants.V1 + ApiConstants.BINNING)
 public class BinningController {
 
@@ -41,10 +37,10 @@ public class BinningController {
 	@POST
 	@Path(ApiConstants.SQUARE + "/{index}/{type}")
 	@Produces(MediaType.APPLICATION_JSON)
-
-	@ApiOperation(value = "Binning", notes = "Returns Data", response = GeojsonData.class)
-	@ApiResponses(value = { @ApiResponse(code = 500, message = "ERROR", response = String.class) })
-
+	@Operation(summary = "Binning", description = "Returns square-binned spatial data as GeoJSON")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(mediaType = "application/json", schema = @Schema(implementation = GeojsonData.class))),
+			@ApiResponse(responseCode = "500", description = "Internal Server Error", content = @Content(mediaType = "application/json", schema = @Schema(type = "string"))) })
 	public GeojsonData bin(@PathParam("index") String index, @PathParam("type") String type,
 			@QueryParam("geoField") String geoField, @QueryParam("cellSideKm") Double cellSideKm, MapBounds bounds) {
 
@@ -55,5 +51,4 @@ public class BinningController {
 					Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build());
 		}
 	}
-
 }

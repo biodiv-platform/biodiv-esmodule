@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package com.strandls.esmodule.models;
 
@@ -16,7 +16,7 @@ public class ObservationNearBy {
 	private String speciesGroupName;
 
 	/**
-	 * 
+	 *
 	 */
 	public ObservationNearBy() {
 		super();

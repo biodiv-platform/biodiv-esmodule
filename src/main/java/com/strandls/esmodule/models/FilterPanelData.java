@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package com.strandls.esmodule.models;
 
@@ -18,7 +18,7 @@ public class FilterPanelData {
 	private List<CustomFields> customFields;
 
 	/**
-	 * 
+	 *
 	 */
 	public FilterPanelData() {
 		super();

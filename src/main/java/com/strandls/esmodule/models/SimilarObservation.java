@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package com.strandls.esmodule.models;
 
@@ -13,7 +13,7 @@ public class SimilarObservation {
 	private String reprImage;
 
 	/**
-	 * 
+	 *
 	 */
 	public SimilarObservation() {
 		super();

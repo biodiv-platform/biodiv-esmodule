@@ -1,13 +1,13 @@
 
 /**
- * 
+ *
  */
 package com.strandls.esmodule.models;
 
 /**
  * @author Abhishek Rudra
  *
- * 
+ *
  */
 public class MaxVotedRecoFreq {
 

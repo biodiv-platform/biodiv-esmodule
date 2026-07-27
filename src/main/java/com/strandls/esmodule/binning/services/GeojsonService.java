@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package com.strandls.esmodule.binning.services;
 
@@ -14,7 +14,7 @@ import com.strandls.esmodule.binning.models.GeojsonData;
 public interface GeojsonService {
 
 	/*
-	 * 
+	 *
 	 */
 	public GeojsonData getGeojsonData(String index, String type, String geoField, double[][][] coordinatesList)
 			throws IOException;

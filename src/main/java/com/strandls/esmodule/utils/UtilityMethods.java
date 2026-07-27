@@ -21,14 +21,13 @@ public class UtilityMethods {
 
 	static {
 		esIndexConstants.put("etd", "extended_taxon_definition");
-		esIndexConstants.put("eo","extended_observation");
-		esIndexConstants.put("eaf","extended_activity_feed");
-		esIndexConstants.put("ed","document");
-		esIndexConstants.put("esp","extended_species");
-		esIndexConstants.put("eu","extended_user");
-		
-		
-		esIndexTypeConstant.put("er","_doc");
+		esIndexConstants.put("eo", "extended_observation");
+		esIndexConstants.put("eaf", "extended_activity_feed");
+		esIndexConstants.put("ed", "document");
+		esIndexConstants.put("esp", "extended_species");
+		esIndexConstants.put("eu", "extended_user");
+
+		esIndexTypeConstant.put("er", "_doc");
 	}
 
 	public String getEsIndexConstants(String index) {
@@ -132,7 +131,7 @@ public class UtilityMethods {
 		for (Integer index : orderedIndexes) {
 			finalRecords.add(records.get(index));
 		}
-	
+
 		return finalRecords;
 	}
 

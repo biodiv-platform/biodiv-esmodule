@@ -16,7 +16,7 @@ import org.xml.sax.InputSource;
 
 /**
  * Common utility methods
- * 
+ *
  * @author mukund
  *
  */
@@ -26,7 +26,8 @@ public class Utils {
 
 	private static final Logger logger = LoggerFactory.getLogger(Utils.class);
 
-	private Utils() {}
+	private Utils() {
+	}
 
 	public static Document convertStringToDocument(String xmlStr) {
 		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();

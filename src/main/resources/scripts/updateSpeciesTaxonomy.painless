@@ -1,0 +1,208 @@
+boolean updated = false;
+String newName = params.name;
+String italicisedName = params.italicised_form;
+String canonicalName = params.canonical_form;
+String normalizedName = params.normalized_name;
+String position = params.position;
+long targetId = params.targetId;
+def speciesId = params.speciesId;
+String title = params.title;
+String status = params.status;
+String rank = params.rank;
+String binomialForm = params.binomialForm;
+List breadCrumbs = params.breadCrumbs;
+List bulkIds = params.bulkIds;
+List transferSynonymIds = params.transferSynonymIds;
+List transferSpeciesIds = params.transferSpeciesIds;
+def newTaxonId = params.newId;
+List newSynonyms = params.synonyms;
+List acceptedBreadCrumbs = params.acceptedBreadCrumbs;
+
+if (ctx._source.species?.id == speciesId) {
+	if (title!=null){
+		ctx._source.species.title = title;
+		updated = true;
+	}
+}
+
+if (ctx._source.taxonomyDefinition?.id == targetId) {
+	if (newName!=null){
+	    ctx._source.taxonomyDefinition.canonicalForm = canonicalName;
+	    ctx._source.taxonomyDefinition.italicisedForm = italicisedName;
+	    ctx._source.taxonomyDefinition.name = newName;
+	    ctx._source.taxonomyDefinition.normalizedForm = normalizedName;
+	    ctx._source.taxonomyDefinition.binomialForm = binomialForm;
+	    updated = true;
+    }
+    if (position!=null){
+    	ctx._source.taxonomyDefinition.position = position;
+    	updated = true;
+    }
+    if (rank!=null){
+    	ctx._source.taxonomyDefinition.rank = rank;
+    	updated = true;
+    }
+    if (status!=null){
+    	ctx._source.taxonomyDefinition.status = status;
+    	updated = true;
+    }
+} else if (ctx._source.taxonomyDefinition?.id != null && bulkIds != null && bulkIds.contains(ctx._source.taxonomyDefinition?.id)){
+     if (position!=null){
+         ctx._source.taxonomyDefinition.position = position;
+    	 updated = true;
+      }
+ }
+
+List synonyms = ctx._source.taxonomicNames?.synonyms;
+if (synonyms != null) {
+    int size = synonyms.size();
+    int synonym_index = -1;
+    List transferIndices = new ArrayList();
+    for (int i = 0; i < size; i++) {
+        def synonym = synonyms.get(i);
+        if (synonym?.name == null) continue;
+        
+        if (transferSynonymIds != null && transferSynonymIds.contains(synonym.id) 
+		        && ctx._source.taxonomyDefinition?.id == targetId) {
+		    transferIndices.add(i);
+		    updated = true;
+		    continue;
+		}
+		
+        if (synonym.id == targetId) {
+        	if (synonym.status != status && status == "ACCEPTED") {
+        		synonym_index = i;
+        	}else{
+        		if (newName!=null){
+		            synonym.canonicalForm = canonicalName;
+				    synonym.italicisedForm = italicisedName;
+				    synonym.name = newName;
+				    synonym.normalizedForm = normalizedName;
+				    synonym.binomialForm = binomialForm;
+				    updated = true;
+			    }
+			    if (position!=null){
+			    	synonym.position = position;
+			    	updated = true;
+			    }
+			    if (status!=null){
+			    	synonym.status = status;
+			    	updated = true;
+			    }
+			    if (rank!=null){
+			    	synonym.rank = rank;
+			    	updated = true;
+			    }
+	        } 
+        }else if (bulkIds != null && bulkIds.contains(synonym.id)){
+		     if (position!=null){
+		         synonym.position = position;
+			     updated = true;
+		      }
+		 }
+    }
+    
+    if (!transferIndices.isEmpty()) {
+        for (int i = transferIndices.size() - 1; i >= 0; i--) {
+            synonyms.remove((int) transferIndices.get(i));
+        }
+        ctx._source.taxonomicNames.synonyms = synonyms;
+    }
+    
+    if (synonym_index != -1){
+    	synonyms.remove(synonym_index);
+    	ctx._source.taxonomicNames.synonyms = synonyms;
+    }
+}
+
+if (newTaxonId != null && ctx._source.taxonomyDefinition?.id == newTaxonId && newSynonyms != null) {
+    synonyms.addAll(newSynonyms);
+    ctx._source.taxonomicNames.synonyms = synonyms;
+    updated = true;
+}
+
+List hierarchy = ctx._source.breadCrumbs;
+if (hierarchy != null && breadCrumbs != null) {
+	if (status!=null && status == "ACCEPTED" && ctx._source.taxonomyDefinition?.id == targetId) {
+		List trimmed = new ArrayList();
+	    for (int i = 0; i < breadCrumbs.size(); i++) {
+	        def crumb = breadCrumbs.get(i);
+	        def entry = new HashMap();
+	        entry.put("id", crumb.get("taxon_id"));
+	        entry.put("name", crumb.get("taxon_name"));
+	        entry.put("rankName", crumb.get("taxon_rank"));
+	        trimmed.add(entry);
+	    }
+	    ctx._source.breadCrumbs = trimmed;
+	    updated = true; 
+	} else {
+	    int cutIndex = -1;
+	    for (int i = 0; i < hierarchy.size(); i++) {
+	        def entry = hierarchy.get(i);
+	        if (bulkIds != null && bulkIds.contains(entry?.id)){
+	        	cutIndex = i;
+	        	break;
+	        }
+	        if (entry?.id == targetId) {
+	            cutIndex = i;
+	            break;
+	        }
+	    }
+	    
+	    if (cutIndex != -1) {
+	       List trimmed = new ArrayList();
+	       int loopSize = breadCrumbs.size();
+	       if (ctx._source.taxonomyDefinition.rank == rank) {
+	       		loopSize = loopSize -1 ;
+	       }
+	       for (int i = 0; i < breadCrumbs.size(); i++) {
+	            def crumb = breadCrumbs.get(i);
+	            def entry = new HashMap();
+	            entry.put("id", crumb.get("taxon_id"));
+	            entry.put("name", crumb.get("taxon_name"));
+	            entry.put("rankName", crumb.get("taxon_rank"));
+	            trimmed.add(entry);
+	       }
+	       for (int i = cutIndex + 1; i < hierarchy.size(); i++) {
+	            trimmed.add(hierarchy.get(i));
+	       }
+	       ctx._source.breadCrumbs = trimmed;
+	       updated = true;
+       }
+    }
+}else if (acceptedBreadCrumbs!=null && transferSynonymIds != null && transferSynonymIds.contains(ctx._source.taxonomyDefinition?.id)){
+List trimmed = new ArrayList();
+	    for (int i = 0; i < acceptedBreadCrumbs.size(); i++) {
+	        def crumb = acceptedBreadCrumbs.get(i);
+	        def entry = new HashMap();
+	        entry.put("id", crumb.get("taxon_id"));
+	        entry.put("name", crumb.get("taxon_name"));
+	        entry.put("rankName", crumb.get("taxon_rank"));
+	        trimmed.add(entry);
+	    }
+	    ctx._source.breadCrumbs = trimmed;
+	    updated = true; 
+} else if (hierarchy != null && breadCrumbs == null && ctx._source.taxonomyDefinition?.id == targetId) {
+	if (newName!=null){
+    	int size = hierarchy.size();
+	    for (int i = 0; i < size; i++) {
+	        def entry = hierarchy.get(i);
+	        if (entry?.id == targetId) {
+	            entry.name = newName;
+	            updated = true;
+	        }
+	    }
+    }else if (acceptedBreadCrumbs!=null){
+    List trimmed = new ArrayList();
+	    for (int i = 0; i < acceptedBreadCrumbs.size(); i++) {
+	        def crumb = acceptedBreadCrumbs.get(i);
+	        def entry = new HashMap();
+	        entry.put("id", crumb.get("taxon_id"));
+	        entry.put("name", crumb.get("taxon_name"));
+	        entry.put("rankName", crumb.get("taxon_rank"));
+	        trimmed.add(entry);
+	    }
+	    ctx._source.breadCrumbs = trimmed;
+	    updated = true; 
+    }
+}

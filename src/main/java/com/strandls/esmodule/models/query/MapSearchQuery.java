@@ -6,10 +6,9 @@ import com.strandls.esmodule.models.MapSearchParams;
 
 /**
  * A master query with combination of {@link MapBoolQuery},
- * {@link MapRangeQuery}, {@link MapExistQuery}
- * and {@link MapMatchPhraseQuery}.
+ * {@link MapRangeQuery}, {@link MapExistQuery} and {@link MapMatchPhraseQuery}.
  * There is an "AND" between any pair of queries.
- * 
+ *
  * @author mukund
  */
 public class MapSearchQuery {
@@ -30,6 +29,10 @@ public class MapSearchQuery {
 
 	private MapSearchParams searchParams;
 
+	private String pathHierarchy;
+
+	private String treeSortPrefix;
+
 	public MapSearchQuery() {
 	}
 
@@ -37,8 +40,8 @@ public class MapSearchQuery {
 			List<MapAndRangeQuery> andRangeQueries, List<MapOrRangeQuery> orRangeQueries,
 			List<MapExistQuery> andExistQueries, List<MapAndMatchPhraseQuery> andMatchPhraseQueries,
 			List<MapOrMatchPhraseQuery> orMatchPhraseQueries) {
-		this(andBoolQueries, orBoolQueries, andRangeQueries, orRangeQueries, andExistQueries,
-				andMatchPhraseQueries, orMatchPhraseQueries, null);
+		this(andBoolQueries, orBoolQueries, andRangeQueries, orRangeQueries, andExistQueries, andMatchPhraseQueries,
+				orMatchPhraseQueries, null);
 	}
 
 	public MapSearchQuery(List<MapAndBoolQuery> andBoolQueries, List<MapOrBoolQuery> orBoolQueries,
@@ -118,6 +121,22 @@ public class MapSearchQuery {
 
 	public void setSearchParams(MapSearchParams searchParams) {
 		this.searchParams = searchParams;
+	}
+
+	public String getPathHierarchy() {
+		return pathHierarchy;
+	}
+
+	public void setPathHierarchy(String pathHierarchy) {
+		this.pathHierarchy = pathHierarchy;
+	}
+
+	public String getTreeSortPrefix() {
+		return treeSortPrefix;
+	}
+
+	public void setTreeSortPrefix(String treeSortPrefix) {
+		this.treeSortPrefix = treeSortPrefix;
 	}
 
 	@Override

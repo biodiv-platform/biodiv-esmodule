@@ -3,7 +3,7 @@ package com.strandls.esmodule.models.query;
 /**
  * Query of the form that a key can have its value in the range from start to
  * end both inclusive
- * 
+ *
  * @author mukund
  */
 public class MapRangeQuery extends MapQuery {
@@ -12,8 +12,9 @@ public class MapRangeQuery extends MapQuery {
 
 	private Object end;
 
-	public MapRangeQuery() {}
-	
+	public MapRangeQuery() {
+	}
+
 	public MapRangeQuery(String key, Object start, Object end, String path) {
 		super(key, path);
 		this.start = start;

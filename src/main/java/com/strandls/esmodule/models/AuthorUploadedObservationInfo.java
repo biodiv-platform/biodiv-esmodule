@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package com.strandls.esmodule.models;
 
@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * @author Abhishek Rudra
  *
- * 
+ *
  */
 public class AuthorUploadedObservationInfo {
 

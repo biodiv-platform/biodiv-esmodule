@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package com.strandls.esmodule.models;
 
@@ -18,7 +18,7 @@ public class MaxVotedReco {
 	private String taxonstatus;
 
 	/**
-	 * 
+	 *
 	 */
 	public MaxVotedReco() {
 		super();
