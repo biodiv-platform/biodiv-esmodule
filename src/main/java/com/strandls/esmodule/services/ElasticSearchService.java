@@ -21,6 +21,7 @@ import com.strandls.esmodule.models.MonthAggregation;
 import com.strandls.esmodule.models.ObservationInfo;
 import com.strandls.esmodule.models.ObservationLatLon;
 import com.strandls.esmodule.models.ObservationNearBy;
+import com.strandls.esmodule.models.TaxonomyBulkUpdateData;
 import com.strandls.esmodule.models.TaxonomyUpdateData;
 import com.strandls.esmodule.models.UploadersInfo;
 import com.strandls.esmodule.models.query.MapBoolQuery;
@@ -40,6 +41,8 @@ public interface ElasticSearchService {
 	public List<UploadersInfo> uploaderInfo(String index, String userIds);
 
 	public List<IdentifiersInfo> identifierInfo(String index, String userIds);
+
+	public Map<Long, Long> speciesInfo(String taxonIds);
 
 	/**
 	 * Creates a document in es
@@ -386,4 +389,10 @@ public interface ElasticSearchService {
 	public void speciesUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query speciesQuery) throws IOException;
 
 	MapQueryResponse bulkDelete(String index, String type, List<String> documentIds) throws IOException;
+
+	public void observationBulkUpdateByTaxonId(List<TaxonomyBulkUpdateData> taxonomyData, Query filterQuery)
+			throws IOException;
+
+	public void speciesBulkUpdateByTaxonId(List<TaxonomyBulkUpdateData> taxonomyData, Query speciesQuery)
+			throws IOException;
 }

@@ -1,0 +1,84 @@
+List updates = params.updates;
+List recoVotes = ctx._source.all_reco_vote;
+
+if (updates == null || updates.isEmpty() || recoVotes == null) {
+    ctx.op = 'noop';
+    return;
+}
+
+// targetId -> position / name update entry (String key avoids Integer/Long mismatches)
+Map positionById = new HashMap();
+Map nameById = new HashMap();
+for (def u : updates) {
+    if (u == null || u.targetId == null) continue;
+    String key = String.valueOf(u.targetId);
+    if (u.position != null) {
+        positionById.put(key, u.position);
+    }
+    if (u.name != null) {
+        nameById.put(key, u);
+    }
+}
+
+boolean updated = false;
+def maxReco = ctx._source.max_voted_reco;
+String maxRecoId = (maxReco != null && maxReco.id != null) ? String.valueOf(maxReco.id) : null;
+def maxUpd = null;
+
+for (int i = 0; i < recoVotes.size(); i++) {
+    def reco = recoVotes.get(i);
+    def taxonDetail = reco?.scientific_name?.taxon_detail;
+    if (taxonDetail == null || taxonDetail.id == null) continue;
+
+    String key = String.valueOf(taxonDetail.id);
+    def newPosition = positionById.get(key);
+    def newName = nameById.get(key);
+
+    if (newPosition != null && !newPosition.equals(taxonDetail.position)) {
+        taxonDetail.position = newPosition;
+        updated = true;
+    }
+
+    if (newName != null) {
+        taxonDetail.name = newName.name;
+        if (newName.normalizedName != null) taxonDetail.scientific_name = newName.normalizedName;
+        if (newName.italicisedForm != null) taxonDetail.italicised_form = newName.italicisedForm;
+        if (newName.canonicalForm != null)  taxonDetail.canonical_form  = newName.canonicalForm;
+        if (newName.scientificName != null) reco.scientific_name.name   = newName.scientificName;
+        updated = true;
+
+        // Is this the reco that max_voted_reco points to?
+        if (maxRecoId != null && String.valueOf(reco.recommendation_id).equals(maxRecoId)) {
+            maxUpd = newName;
+        }
+    }
+}
+
+// max_voted_reco scalar rename
+if (maxReco != null && maxUpd != null) {
+    if (maxUpd.scientificName != null) maxReco.scientific_name = maxUpd.scientificName;
+    if (maxUpd.italicisedForm != null) maxReco.italicised_form = maxUpd.italicisedForm;
+    updated = true;
+}
+
+// max_voted_reco.hierarchy renames
+List hierarchy = maxReco?.hierarchy;
+if (hierarchy != null) {
+    for (int i = 0; i < hierarchy.size(); i++) {
+        def entry = hierarchy.get(i);
+        if (entry?.taxon_id == null) continue;
+        def upd = nameById.get(String.valueOf(entry.taxon_id));
+        if (upd != null && upd.normalizedName != null) {
+            entry.normalized_name = upd.normalizedName;
+            updated = true;
+        }
+    }
+}
+
+if (updated) {
+    if (params.timestamp != null) {
+        ctx._source.last_revised = params.timestamp;
+    }
+} else {
+    ctx.op = 'noop';
+}

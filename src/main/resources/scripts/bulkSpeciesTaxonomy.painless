@@ -1,0 +1,90 @@
+List updates = params.updates;
+
+if (updates == null || updates.isEmpty()) {
+    ctx.op = 'noop';
+    return;
+}
+
+// targetId -> position / name update entry (String key avoids Integer/Long mismatches)
+Map positionById = new HashMap();
+Map nameById = new HashMap();
+for (def u : updates) {
+    if (u.targetId != null) {
+        if (u.position != null) {
+            positionById.put(String.valueOf(u.targetId), u.position);
+        }
+        if (u.name != null) {
+            nameById.put(String.valueOf(u.targetId), u);
+        }
+    }
+}
+
+boolean updated = false;
+
+// ---------- taxonomyDefinition ----------
+def td = ctx._source.taxonomyDefinition;
+if (td != null && td.id != null) {
+    String key = String.valueOf(td.id);
+
+    def newPosition = positionById.get(key);
+    if (newPosition != null && !newPosition.equals(td.position)) {
+        td.position = newPosition;
+        updated = true;
+    }
+
+    def newName = nameById.get(key);
+    if (newName != null) {
+        td.canonicalForm  = newName.canonical_form;
+        td.italicisedForm = newName.italicised_form;
+        td.name           = newName.name;
+        td.normalizedForm = newName.normalized_name;
+        td.binomialForm   = newName.binomialForm;
+        updated = true;
+    }
+}
+
+// ---------- synonyms ----------
+List synonyms = ctx._source.taxonomicNames?.synonyms;
+if (synonyms != null) {
+    for (int i = 0; i < synonyms.size(); i++) {
+        def synonym = synonyms.get(i);
+        if (synonym?.id == null) continue;
+
+        String key = String.valueOf(synonym.id);
+
+        def newPosition = positionById.get(key);
+        if (newPosition != null && !newPosition.equals(synonym.position)) {
+            synonym.position = newPosition;
+            updated = true;
+        }
+
+        def newName = nameById.get(key);
+        if (newName != null) {
+            synonym.canonicalForm  = newName.canonical_form;
+            synonym.italicisedForm = newName.italicised_form;
+            synonym.name           = newName.name;
+            synonym.normalizedForm = newName.normalized_name;
+            synonym.binomialForm   = newName.binomialForm;
+            updated = true;
+        }
+    }
+}
+
+// ---------- breadCrumbs (ancestor renames) ----------
+List hierarchy = ctx._source.breadCrumbs;
+if (hierarchy != null) {
+    for (int i = 0; i < hierarchy.size(); i++) {
+        def entry = hierarchy.get(i);
+        if (entry?.id == null) continue;
+
+        def newName = nameById.get(String.valueOf(entry.id));
+        if (newName != null && newName.name != null) {
+            entry.name = newName.name;
+            updated = true;
+        }
+    }
+}
+
+if (!updated) {
+    ctx.op = 'noop';
+}

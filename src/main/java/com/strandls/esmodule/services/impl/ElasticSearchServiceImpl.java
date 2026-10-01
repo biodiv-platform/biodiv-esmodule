@@ -2,12 +2,14 @@ package com.strandls.esmodule.services.impl;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -67,6 +69,7 @@ import com.strandls.esmodule.models.ObservationMapInfo;
 import com.strandls.esmodule.models.ObservationNearBy;
 import com.strandls.esmodule.models.SimilarObservation;
 import com.strandls.esmodule.models.SpeciesGroup;
+import com.strandls.esmodule.models.TaxonomyBulkUpdateData;
 import com.strandls.esmodule.models.TaxonomyUpdateData;
 import com.strandls.esmodule.models.TraitValue;
 import com.strandls.esmodule.models.Traits;
@@ -666,6 +669,44 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			}
 		}
 		return (result);
+	}
+
+	public Map<Long, Long> speciesInfo(String taxonIds) {
+	    List<String> ids = Arrays.asList(taxonIds.split(","));
+	    Map<Long, Long> result = new HashMap<>();
+	    if (ids.isEmpty()) {
+	        return result;
+	    }
+
+	    List<FieldValue> fieldValues = ids.stream()
+	            .map(FieldValue::of)
+	            .collect(Collectors.toList());
+
+	    Query query = TermsQuery.of(t -> t
+	            .field("species.taxonConceptId")
+	            .terms(v -> v.value(fieldValues)))
+	            ._toQuery();
+
+	    try {
+	        SearchResponse<Map> response = client.getClient()
+	                .search(s -> s.index("extended_species").query(query).size(ids.size()), Map.class);
+
+	        for (Hit<Map> hit : response.hits().hits()) {
+	            Map<String, Object> sourceMap = hit.source();
+	            if (sourceMap == null) {
+	                continue;
+	            }
+
+	           Long speciesId = (Long) sourceMap.get("species.id");
+	           Long taxonId = (Long) sourceMap.get("species.species.taxonConceptId");
+	           
+	           result.put(taxonId, speciesId);
+	        }
+	    } catch (Exception e) {
+	        logger.error("Error fetching species info for taxonIds={}", taxonIds, e);
+	    }
+
+	    return result;
 	}
 
 	private MapDocument aggregateSearchGeo(String index, String field, Integer precision, Query query)
@@ -2579,6 +2620,103 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
 		logger.info("UpdateByQuery Observation task ID: {}", response.task());
+	}
+	
+	public void observationBulkUpdateByTaxonId(List<TaxonomyBulkUpdateData> taxonomyData, Query filterQuery) throws IOException {
+		if (taxonomyData == null || taxonomyData.isEmpty()) {
+			logger.warn("observationBulkUpdateByTaxonId: no updates, skipping");
+			return;
+		}
+
+		// Build a real list of maps so "updates" is sent as a JSON array, not a string
+		List<Map<String, Object>> updates = new ArrayList<>();
+		for (TaxonomyBulkUpdateData d : taxonomyData) {
+			if (d == null || d.getTargetId() == null) {
+				continue; // skip empty placeholder entries
+			}
+			Map<String, Object> m = new HashMap<>();
+			m.put("targetId", d.getTargetId());
+			m.put("position", d.getPosition());
+			m.put("name", d.getName());
+			m.put("normalizedName", d.getNormalizedName());
+			m.put("italicisedForm", d.getItalicisedForm());
+			m.put("canonicalForm", d.getCanonicalForm());
+			m.put("scientificName", d.getScientificName());
+			updates.add(m);
+		}
+
+		if (updates.isEmpty()) {
+			logger.warn("observationBulkUpdateByTaxonId: no valid updates after filtering, skipping");
+			return;
+		}
+
+		logger.info("observationBulkUpdateByTaxonId v2: {} updates", updates.size());
+
+		Map<String, JsonData> params = new HashMap<>();
+		params.put("updates", JsonData.of(updates));
+		params.put("timestamp", JsonData.of(Instant.now().toString())); // match your last_revised format
+
+		String painlessScript = ESmoduleConfig.fetchFileAsString("scripts/bulkObservationTaxonomy.painless");
+
+		Script script = Script.of(
+				s -> s.source(src -> src.scriptString(painlessScript)).lang(ScriptLanguage.Painless).params(params));
+
+		UpdateByQueryRequest updateByQueryRequest = UpdateByQueryRequest.of(u -> u.index("extended_observation")
+				.conflicts(Conflicts.Proceed).waitForCompletion(false).script(script).query(filterQuery));
+
+		logger.info("BulkUpdateByQueryRequest: {}", updateByQueryRequest.toString());
+
+		UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
+		logger.info("BulkUpdateByQuery Observation task ID: {}", response.task());
+	}
+	
+	public void speciesBulkUpdateByTaxonId(List<TaxonomyBulkUpdateData> taxonomyData, Query filterQuery) throws IOException {
+		if (taxonomyData == null || taxonomyData.isEmpty()) {
+			logger.warn("observationBulkUpdateByTaxonId: no updates, skipping");
+			return;
+		}
+
+		// Build a real list of maps so "updates" is sent as a JSON array, not a string
+		List<Map<String, Object>> updates = new ArrayList<>();
+		for (TaxonomyBulkUpdateData d : taxonomyData) {
+			if (d == null || d.getTargetId() == null) {
+				continue; // skip empty placeholder entries
+			}
+			Map<String, Object> m = new HashMap<>();
+			m.put("targetId", d.getTargetId());
+			m.put("position", d.getPosition());
+			m.put("name", d.getName());
+			m.put("normalizedName", d.getNormalizedName());
+			m.put("italicisedForm", d.getItalicisedForm());
+			m.put("canonicalForm", d.getCanonicalForm());
+			m.put("scientificName", d.getScientificName());
+			updates.add(m);
+		}
+
+		if (updates.isEmpty()) {
+			logger.warn("observationBulkUpdateByTaxonId: no valid updates after filtering, skipping");
+			return;
+		}
+
+		logger.info("observationBulkUpdateByTaxonId v2: {} updates", updates.size());
+
+		Map<String, JsonData> params = new HashMap<>();
+		params.put("updates", JsonData.of(updates));
+		params.put("timestamp", JsonData.of(Instant.now().toString()));
+		
+		String painlessScript = ESmoduleConfig.fetchFileAsString("scripts/bulkSpeciesTaxonomy.painless");
+
+		Script script = Script.of(
+				s -> s.source(src -> src.scriptString(painlessScript)).lang(ScriptLanguage.Painless).params(params));
+
+		UpdateByQueryRequest updateByQueryRequest = UpdateByQueryRequest.of(u -> u.index("extended_species")
+				.conflicts(Conflicts.Proceed).waitForCompletion(false).script(script).query(filterQuery));
+
+		logger.info("BulkUpdateByQueryRequest: {}", updateByQueryRequest.toString());
+
+		UpdateByQueryResponse response = client.getClient().updateByQuery(updateByQueryRequest);
+		logger.info("BulkUpdateByQuery Species task ID: {}", response.task());
+		
 	}
 
 	public void speciesUpdateByTaxonId(TaxonomyUpdateData taxonomyData, Query speciesQuery) throws IOException {

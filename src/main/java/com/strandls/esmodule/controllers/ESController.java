@@ -2,6 +2,7 @@ package com.strandls.esmodule.controllers;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,8 @@ import com.strandls.esmodule.models.MonthAggregation;
 import com.strandls.esmodule.models.ObservationInfo;
 import com.strandls.esmodule.models.ObservationLatLon;
 import com.strandls.esmodule.models.ObservationNearBy;
+import com.strandls.esmodule.models.TaxonomyBulkUpdateData;
+import com.strandls.esmodule.models.TaxonomyBulkUpdateRequest;
 import com.strandls.esmodule.models.TaxonomyUpdateData;
 import com.strandls.esmodule.models.UploadersInfo;
 import com.strandls.esmodule.models.query.MapBoolQuery;
@@ -123,6 +126,24 @@ public class ESController {
 	public Response getUploaderInfo(@PathParam("index") String index, @PathParam("userIds") String userIds) {
 		try {
 			List<UploadersInfo> result = elasticSearchService.uploaderInfo(index, userIds);
+			return Response.status(Status.OK).entity(result).build();
+		} catch (Exception e) {
+			return Response.status(Status.BAD_REQUEST).build();
+		}
+	}
+
+	@GET
+	@Path(ApiConstants.SPECIESINFO + "/{userIds}")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Fetch details of species", description = "Returns a species id for list of taxonIds")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = Map.class))),
+			@ApiResponse(responseCode = "400", description = "Exception"),
+			@ApiResponse(responseCode = "500", description = "ERROR") })
+	public Response getSpeciesInfo(@PathParam("userIds") String userIds) {
+		try {
+			Map<Long, Long> result = elasticSearchService.speciesInfo(userIds);
 			return Response.status(Status.OK).entity(result).build();
 		} catch (Exception e) {
 			return Response.status(Status.BAD_REQUEST).build();
@@ -1072,6 +1093,79 @@ public class ESController {
 			Query speciesQuery = BoolQuery.of(b -> b.should(shouldClauses).minimumShouldMatch("1"))._toQuery();
 
 			elasticSearchService.speciesUpdateByTaxonId(taxonomyData, speciesQuery);
+
+			return Response.status(Status.OK).entity("Async update initiated successfully").build();
+		} catch (Exception e) {
+			return Response.status(Status.BAD_REQUEST).entity("Failed to initiate async update: " + e.getMessage())
+					.build();
+		}
+	}
+
+	@POST
+	@Path("observationBulkUpdate")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "observation bulk taxonomy propagation", description = "observation bulk taxonomy propagation")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
+			@ApiResponse(responseCode = "400", description = "unable to trigger propagation for observation") })
+	public Response updateBulkObservation(TaxonomyBulkUpdateRequest request) {
+		try {
+			List<TaxonomyBulkUpdateData> taxonomyData = request.getUpdates();
+
+			List<FieldValue> targetIds = request.getRecoIds() != null
+					? request.getRecoIds().stream().map(FieldValue::of).distinct().collect(Collectors.toList())
+					: Collections.emptyList();
+			Query filterQuery = BoolQuery
+					.of(b -> b
+							.should(TermsQuery.of(t -> t.field("max_voted_reco.hierarchy.taxon_id")
+									.terms(TermsQueryField.of(f -> f.value(targetIds))))._toQuery(),
+									TermsQuery.of(t -> t.field("all_reco_vote.scientific_name.taxon_detail.id")
+											.terms(TermsQueryField.of(f -> f.value(targetIds))))._toQuery())
+							.minimumShouldMatch("1"))
+					._toQuery();
+
+			elasticSearchService.observationBulkUpdateByTaxonId(taxonomyData, filterQuery);
+
+			return Response.status(Status.OK).entity("Async update initiated successfully").build();
+		} catch (Exception e) {
+			return Response.status(Status.BAD_REQUEST).entity("Failed to initiate async update: " + e.getMessage())
+					.build();
+		}
+	}
+
+	@POST
+	@Path("speciesBulkUpdate")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "species bulk taxonomy propagation", description = "species bulk taxonomy propagation")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = String.class))),
+			@ApiResponse(responseCode = "400", description = "unable to trigger propagation for species") })
+	public Response updateBulkSpecies(TaxonomyBulkUpdateRequest request) {
+		try {
+			List<TaxonomyBulkUpdateData> taxonomyData = request.getUpdates();
+
+			List<FieldValue> targetIds = request.getRecoIds() != null
+					? request.getRecoIds().stream().map(FieldValue::of).distinct().collect(Collectors.toList())
+					: Collections.emptyList();
+
+			List<Query> shouldClauses = new ArrayList<>();
+			shouldClauses.add(TermsQuery
+					.of(t -> t.field("taxonomyDefinition.id").terms(TermsQueryField.of(f -> f.value(targetIds))))
+					._toQuery());
+
+			// Documents that have bulkIds as synonyms
+			shouldClauses.add(TermsQuery
+					.of(t -> t.field("taxonomicNames.synonyms.id").terms(TermsQueryField.of(f -> f.value(targetIds))))
+					._toQuery());
+
+			// Documents whose breadcrumbs contain bulkIds
+			shouldClauses.add(TermsQuery
+					.of(t -> t.field("breadCrumbs.id").terms(TermsQueryField.of(f -> f.value(targetIds))))._toQuery());
+			Query speciesQuery = BoolQuery.of(b -> b.should(shouldClauses).minimumShouldMatch("1"))._toQuery();
+
+			elasticSearchService.speciesBulkUpdateByTaxonId(taxonomyData, speciesQuery);
 
 			return Response.status(Status.OK).entity("Async update initiated successfully").build();
 		} catch (Exception e) {

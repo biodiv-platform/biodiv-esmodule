@@ -56,6 +56,7 @@ public class ApiConstants {
 	public static final String USERINFO = "/userInfo";
 	public static final String UPLOADERSINFO = "/uploadersInfo";
 	public static final String IDENTIFIERSINFO = "/identifiersInfo";
+	public static final String SPECIESINFO = "/speciesInfo";
 	// binning Controller
 	public static final String BINNING = "/binning";
 	public static final String SQUARE = "/square";
