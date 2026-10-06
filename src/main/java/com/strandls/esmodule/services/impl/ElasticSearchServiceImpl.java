@@ -47,6 +47,7 @@ import com.strandls.esmodule.ESmoduleConfig;
 import com.strandls.esmodule.indexes.pojo.ExtendedTaxonDefinition;
 import com.strandls.esmodule.models.AggregationResponse;
 import com.strandls.esmodule.models.AuthorUploadedObservationInfo;
+import com.strandls.esmodule.models.Breadcrumb;
 import com.strandls.esmodule.models.CustomFieldValues;
 import com.strandls.esmodule.models.CustomFields;
 import com.strandls.esmodule.models.DayAggregation;
@@ -2627,6 +2628,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			logger.warn("observationBulkUpdateByTaxonId: no updates, skipping");
 			return;
 		}
+		
+		ObjectMapper mapper = new ObjectMapper();
 
 		// Build a real list of maps so "updates" is sent as a JSON array, not a string
 		List<Map<String, Object>> updates = new ArrayList<>();
@@ -2642,6 +2645,20 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			m.put("italicisedForm", d.getItalicisedForm());
 			m.put("canonicalForm", d.getCanonicalForm());
 			m.put("scientificName", d.getScientificName());
+			m.put("status", d.getStatus());
+			m.put("newId", d.getNewId());
+			m.put("transferSynonymIds", d.getTransferSynonymIds());
+			if (d.getAcceptedBreadCrumbs() != null) {
+			    List<Map<String, Object>> crumbs = new ArrayList<>();
+			    for (Breadcrumb b : d.getAcceptedBreadCrumbs()) {
+			        Map<String, Object> c = new HashMap<>();
+			        c.put("taxon_id", b.getTaxonId());
+			        c.put("taxon_name", b.getTaxonName());
+			        c.put("taxon_rank", b.getTaxonRank());
+			        crumbs.add(c);
+			    }
+			    m.put("acceptedBreadCrumbs", crumbs);
+			}
 			updates.add(m);
 		}
 
@@ -2678,6 +2695,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		// Build a real list of maps so "updates" is sent as a JSON array, not a string
 		List<Map<String, Object>> updates = new ArrayList<>();
+		ObjectMapper mapper = new ObjectMapper();
 		for (TaxonomyBulkUpdateData d : taxonomyData) {
 			if (d == null || d.getTargetId() == null) {
 				continue; // skip empty placeholder entries
@@ -2690,6 +2708,20 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 			m.put("italicisedForm", d.getItalicisedForm());
 			m.put("canonicalForm", d.getCanonicalForm());
 			m.put("scientificName", d.getScientificName());
+			m.put("status", d.getStatus());
+			m.put("newId", d.getNewId());
+			m.put("transferSynonymIds", d.getTransferSynonymIds());
+			if (d.getAcceptedBreadCrumbs() != null) {
+			    List<Map<String, Object>> crumbs = new ArrayList<>();
+			    for (Breadcrumb b : d.getAcceptedBreadCrumbs()) {
+			        Map<String, Object> c = new HashMap<>();
+			        c.put("taxon_id", b.getTaxonId());
+			        c.put("taxon_name", b.getTaxonName());
+			        c.put("taxon_rank", b.getTaxonRank());
+			        crumbs.add(c);
+			    }
+			    m.put("acceptedBreadCrumbs", crumbs);
+			}
 			updates.add(m);
 		}
 

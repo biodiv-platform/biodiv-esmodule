@@ -8,15 +8,15 @@ if (updates == null || updates.isEmpty()) {
 // targetId -> position / name update entry (String key avoids Integer/Long mismatches)
 Map positionById = new HashMap();
 Map nameById = new HashMap();
+Map statusById = new HashMap();
+Map crumbsById = new HashMap();
 for (def u : updates) {
-    if (u.targetId != null) {
-        if (u.position != null) {
-            positionById.put(String.valueOf(u.targetId), u.position);
-        }
-        if (u.name != null) {
-            nameById.put(String.valueOf(u.targetId), u);
-        }
-    }
+    if (u == null || u.targetId == null) continue;
+    String k = String.valueOf(u.targetId);
+    if (u.position != null) positionById.put(k, u.position);
+    if (u.name != null) nameById.put(k, u);
+    if (u.status != null) statusById.put(k, u);
+    if (u.acceptedBreadCrumbs != null) crumbsById.put(k, u.acceptedBreadCrumbs);
 }
 
 boolean updated = false;
@@ -40,6 +40,12 @@ if (td != null && td.id != null) {
         td.normalizedForm = newName.normalized_name;
         td.binomialForm   = newName.binomialForm;
         updated = true;
+    }
+    
+    def newStatus = statusById.get(key);
+    if (newStatus != null){
+    	td.status = newStatus.status;
+    	updated = true;
     }
 }
 
@@ -67,20 +73,46 @@ if (synonyms != null) {
             synonym.binomialForm   = newName.binomialForm;
             updated = true;
         }
+        
+        def newStatus = statusById.get(key);
+        if (newStatus != null) {
+        	synonym.status = newStatus.status;
+        	updated = true;
+        }
     }
 }
 
-// ---------- breadCrumbs (ancestor renames) ----------
-List hierarchy = ctx._source.breadCrumbs;
-if (hierarchy != null) {
-    for (int i = 0; i < hierarchy.size(); i++) {
-        def entry = hierarchy.get(i);
-        if (entry?.id == null) continue;
+// ---------- breadCrumbs ----------
+def tdNow = ctx._source.taxonomyDefinition;
+List newCrumbs = (tdNow != null && tdNow.id != null)
+    ? crumbsById.get(String.valueOf(tdNow.id))
+    : null;
 
-        def newName = nameById.get(String.valueOf(entry.id));
-        if (newName != null && newName.name != null) {
-            entry.name = newName.name;
-            updated = true;
+if (newCrumbs != null) {
+    // This doc's taxon got a new accepted lineage: rebuild breadCrumbs
+    List trimmed = new ArrayList();
+    for (int i = 0; i < newCrumbs.size(); i++) {
+        def crumb = newCrumbs.get(i);
+        Map entry = new HashMap();
+        entry.put("id", crumb.taxon_id);
+        entry.put("name", crumb.taxon_name);
+        entry.put("rankName", crumb.taxon_rank);
+        trimmed.add(entry);
+    }
+    ctx._source.breadCrumbs = trimmed;
+    updated = true;
+} else {
+    // Otherwise just apply ancestor renames
+    List hierarchy = ctx._source.breadCrumbs;
+    if (hierarchy != null) {
+        for (int i = 0; i < hierarchy.size(); i++) {
+            def entry = hierarchy.get(i);
+            if (entry?.id == null) continue;
+            def newName = nameById.get(String.valueOf(entry.id));
+            if (newName != null && newName.name != null) {
+                entry.name = newName.name;
+                updated = true;
+            }
         }
     }
 }

@@ -9,6 +9,7 @@ if (updates == null || updates.isEmpty() || recoVotes == null) {
 // targetId -> position / name update entry (String key avoids Integer/Long mismatches)
 Map positionById = new HashMap();
 Map nameById = new HashMap();
+Map statusById = new HashMap();
 for (def u : updates) {
     if (u == null || u.targetId == null) continue;
     String key = String.valueOf(u.targetId);
@@ -18,12 +19,16 @@ for (def u : updates) {
     if (u.name != null) {
         nameById.put(key, u);
     }
+    if (u.status !=null) {
+    	statusById.put(key, u);
+    }
 }
 
 boolean updated = false;
 def maxReco = ctx._source.max_voted_reco;
 String maxRecoId = (maxReco != null && maxReco.id != null) ? String.valueOf(maxReco.id) : null;
 def maxUpd = null;
+def maxStatusUpd = null;
 
 for (int i = 0; i < recoVotes.size(); i++) {
     def reco = recoVotes.get(i);
@@ -33,6 +38,7 @@ for (int i = 0; i < recoVotes.size(); i++) {
     String key = String.valueOf(taxonDetail.id);
     def newPosition = positionById.get(key);
     def newName = nameById.get(key);
+    def newStatus = statusById.get(key);
 
     if (newPosition != null && !newPosition.equals(taxonDetail.position)) {
         taxonDetail.position = newPosition;
@@ -52,6 +58,25 @@ for (int i = 0; i < recoVotes.size(); i++) {
             maxUpd = newName;
         }
     }
+    
+        if (newStatus != null) {
+        String targetStatus = String.valueOf(newStatus.status);
+        def sciName = reco.scientific_name;
+        if (taxonDetail.status != targetStatus) {
+            if (targetStatus == "ACCEPTED") {
+                sciName.accepted_name_id = taxonDetail.id;
+            } else if (newStatus.newId != null) {
+                sciName.accepted_name_id = newStatus.newId;
+            }
+            taxonDetail.status = targetStatus;
+            updated = true;
+        }
+        if (maxRecoId != null && String.valueOf(reco.recommendation_id).equals(maxRecoId)) {
+            maxStatusUpd = newStatus;
+        }
+    }
+    
+    
 }
 
 // max_voted_reco scalar rename
@@ -61,8 +86,34 @@ if (maxReco != null && maxUpd != null) {
     updated = true;
 }
 
-// max_voted_reco.hierarchy renames
-List hierarchy = maxReco?.hierarchy;
+boolean hierarchyCleared = false;
+if (maxReco != null && maxStatusUpd != null) {
+    String newStatus = String.valueOf(maxStatusUpd.status);
+    if (maxReco.taxonstatus != newStatus) {
+        List crumbs = maxStatusUpd.acceptedBreadCrumbs;
+        if (newStatus == "SYNONYM" && maxReco.hierarchy != null) {
+            // Became a synonym: old hierarchy is no longer valid
+            maxReco.hierarchy = null;
+            hierarchyCleared = true;
+        } else if (newStatus == "ACCEPTED" && crumbs != null) {
+            List trimmed = new ArrayList();
+            for (int j = 0; j < crumbs.size(); j++) {
+                def crumb = crumbs.get(j);
+                Map entry = new HashMap();
+                entry.put("taxon_id", crumb.taxon_id);
+                entry.put("normalized_name", crumb.taxon_name);
+                entry.put("rank", crumb.taxon_rank);
+                trimmed.add(entry);
+            }
+            maxReco.hierarchy = trimmed;
+        }
+        maxReco.taxonstatus = newStatus;
+        updated = true;
+    }
+}
+
+// ---- max_voted_reco.hierarchy renames ----
+List hierarchy = hierarchyCleared ? null : maxReco?.hierarchy;
 if (hierarchy != null) {
     for (int i = 0; i < hierarchy.size(); i++) {
         def entry = hierarchy.get(i);

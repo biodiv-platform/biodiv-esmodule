@@ -1,5 +1,7 @@
 package com.strandls.esmodule.models;
 
+import java.util.List;
+
 public class TaxonomyBulkUpdateData {
 
 	private Long targetId;
@@ -14,6 +16,10 @@ public class TaxonomyBulkUpdateData {
 	private String binomialForm;
 	private String scientificName;
 	private String title;
+	private String status;
+	private List<Long> transferSynonymIds;
+	private Long newId;
+	private List<Breadcrumb> acceptedBreadCrumbs;
 
 	public TaxonomyBulkUpdateData() {
 	}
@@ -112,5 +118,37 @@ public class TaxonomyBulkUpdateData {
 
 	public void setTitle(String title) {
 		this.title = title;
+	}
+	
+	public String getStatus() {
+		return status;
+	}
+
+	public void setStatus(String status) {
+		this.status = status;
+	}
+
+	public List<Long> getTransferSynonymIds() {
+		return transferSynonymIds;
+	}
+
+	public void setTransferSynonymIds(List<Long> transferSynonymIds) {
+		this.transferSynonymIds = transferSynonymIds;
+	}
+
+	public Long getNewId() {
+		return newId;
+	}
+
+	public void setNewId(Long newId) {
+		this.newId = newId;
+	}
+	
+	public List<Breadcrumb> getAcceptedBreadCrumbs() {
+		return acceptedBreadCrumbs;
+	}
+
+	public void setAcceptedBreadCrumbs(List<Breadcrumb> acceptedBreadCrumbs) {
+		this.acceptedBreadCrumbs = acceptedBreadCrumbs;
 	}
 }
