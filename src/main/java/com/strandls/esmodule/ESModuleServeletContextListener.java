@@ -4,8 +4,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.http.HttpHost;
-import org.elasticsearch.client.RestClient;
+import org.apache.hc.core5.http.HttpHost;
 import org.glassfish.jersey.servlet.ServletContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,13 +21,13 @@ import com.strandls.esmodule.controllers.ESControllerModule;
 import com.strandls.esmodule.services.impl.ESServiceImplModule;
 import com.strandls.esmodule.utils.UtilityMethods;
 
+import co.elastic.clients.transport.rest5_client.low_level.Rest5Client;
 import jakarta.servlet.ServletContextEvent;
 
 /**
- * @author Abhishek Rudra
+ * @author Arun
  *
  */
-
 public class ESModuleServeletContextListener extends GuiceServletContextListener {
 
 	private final Logger logger = LoggerFactory.getLogger(ESModuleServeletContextListener.class);
@@ -39,15 +38,25 @@ public class ESModuleServeletContextListener extends GuiceServletContextListener
 			@Override
 			protected void configureServlets() {
 
-				ElasticSearchClient esClient = new ElasticSearchClient(
-						RestClient.builder(HttpHost.create(ESmoduleConfig.getString("es.url"))));
-				bind(ElasticSearchClient.class).toInstance(esClient);
+				try {
+					String esUrl = ESmoduleConfig.getString("es.url");
 
+					ElasticSearchClient esClient = new ElasticSearchClient(Rest5Client.builder(HttpHost.create(esUrl)));
+
+					bind(ElasticSearchClient.class).toInstance(esClient);
+
+				} catch (Exception e) { // Catches URISyntaxException
+					logger.error("Failed to initialize Elasticsearch Client: Invalid URL", e);
+					throw new RuntimeException("Elasticsearch configuration failed", e);
+				}
+
+				// 2. Standard Jackson Mapping
 				ObjectMapper objectMapper = new ObjectMapper();
 				bind(ObjectMapper.class).toInstance(objectMapper);
 
 				bind(UtilityMethods.class).in(Scopes.SINGLETON);
 
+				// 3. JAX-RS / Jersey Config (Jakarta EE 10 compatible)
 				Map<String, String> props = new HashMap<String, String>();
 				props.put("jakarta.ws.rs.Application", ApplicationConfig.class.getName());
 				props.put("jersey.config.server.provider.packages", "com");
@@ -65,18 +74,21 @@ public class ESModuleServeletContextListener extends GuiceServletContextListener
 
 	@Override
 	public void contextDestroyed(ServletContextEvent sce) {
+		// Proper cleanup of the Singleton ES Client
 		Injector injector = (Injector) sce.getServletContext().getAttribute(Injector.class.getName());
 
-		ElasticSearchClient elasticSearchClient = injector.getInstance(ElasticSearchClient.class);
-		if (elasticSearchClient != null) {
-			try {
-				elasticSearchClient.close();
-			} catch (IOException e) {
-				logger.error("Error closing elasticsearch client. ", e);
+		if (injector != null) {
+			ElasticSearchClient elasticSearchClient = injector.getInstance(ElasticSearchClient.class);
+			if (elasticSearchClient != null) {
+				try {
+					logger.info("Closing Elasticsearch 9 Client...");
+					elasticSearchClient.close();
+				} catch (IOException e) {
+					logger.error("Error closing elasticsearch client. ", e);
+				}
 			}
 		}
 
 		super.contextDestroyed(sce);
 	}
-
 }
