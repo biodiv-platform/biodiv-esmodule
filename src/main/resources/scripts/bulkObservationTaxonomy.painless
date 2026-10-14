@@ -10,6 +10,7 @@ if (updates == null || updates.isEmpty() || recoVotes == null) {
 Map positionById = new HashMap();
 Map nameById = new HashMap();
 Map statusById = new HashMap();
+Map transferById = new HashMap();
 for (def u : updates) {
     if (u == null || u.targetId == null) continue;
     String key = String.valueOf(u.targetId);
@@ -21,6 +22,9 @@ for (def u : updates) {
     }
     if (u.status !=null) {
     	statusById.put(key, u);
+    }
+    else if (u.newId !=null) {
+    	transferById.put(key, u);
     }
 }
 
@@ -39,6 +43,7 @@ for (int i = 0; i < recoVotes.size(); i++) {
     def newPosition = positionById.get(key);
     def newName = nameById.get(key);
     def newStatus = statusById.get(key);
+    def newTransfer = transferById.get(key);
 
     if (newPosition != null && !newPosition.equals(taxonDetail.position)) {
         taxonDetail.position = newPosition;
@@ -74,6 +79,12 @@ for (int i = 0; i < recoVotes.size(); i++) {
         if (maxRecoId != null && String.valueOf(reco.recommendation_id).equals(maxRecoId)) {
             maxStatusUpd = newStatus;
         }
+    }
+    
+    else if ( newTransfer !=null) {
+    	def sciName = reco.scientific_name;
+    	sciName.accepted_name_id = newTransfer.newId;
+    	updated = true;
     }
     
     
