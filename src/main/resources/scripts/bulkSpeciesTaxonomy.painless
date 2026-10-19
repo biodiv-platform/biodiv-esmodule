@@ -10,12 +10,14 @@ Map positionById = new HashMap();
 Map nameById = new HashMap();
 Map statusById = new HashMap();
 Map crumbsById = new HashMap();
+Map transferById = new HashMap();
 for (def u : updates) {
     if (u == null || u.targetId == null) continue;
     String k = String.valueOf(u.targetId);
     if (u.position != null) positionById.put(k, u.position);
     if (u.name != null) nameById.put(k, u);
     if (u.status != null) statusById.put(k, u);
+    else if (u.newId !=null) transferById.put(k, u);
     if (u.acceptedBreadCrumbs != null) crumbsById.put(k, u.acceptedBreadCrumbs);
 }
 
@@ -51,12 +53,23 @@ if (td != null && td.id != null) {
 
 // ---------- synonyms ----------
 List synonyms = ctx._source.taxonomicNames?.synonyms;
+String tdId = (td != null && td.id != null) ? String.valueOf(td.id) : null;
+
 if (synonyms != null) {
-    for (int i = 0; i < synonyms.size(); i++) {
+    // iterate backwards so removals don't shift unvisited indices
+    for (int i = synonyms.size() - 1; i >= 0; i--) {
         def synonym = synonyms.get(i);
         if (synonym?.id == null) continue;
 
         String key = String.valueOf(synonym.id);
+
+        // transferred to another taxon -> drop it from this document
+        def transfer = transferById.get(key);
+        if (transfer != null && tdId != null && !tdId.equals(String.valueOf(transfer.newId))) {
+            synonyms.remove(i);
+            updated = true;
+            continue;
+        }
 
         def newPosition = positionById.get(key);
         if (newPosition != null && !newPosition.equals(synonym.position)) {
@@ -73,11 +86,11 @@ if (synonyms != null) {
             synonym.binomialForm   = newName.binomialForm;
             updated = true;
         }
-        
+
         def newStatus = statusById.get(key);
         if (newStatus != null) {
-        	synonym.status = newStatus.status;
-        	updated = true;
+            synonym.status = newStatus.status;
+            updated = true;
         }
     }
 }
