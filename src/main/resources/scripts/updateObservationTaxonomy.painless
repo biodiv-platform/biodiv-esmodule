@@ -1,0 +1,173 @@
+boolean updated = false;
+String newName = params.name;
+String italicisedName = params.italicised_form;
+String canonicalName = params.canonical_form;
+String normalizedName = params.normalized_name;
+String oldName = params.old_name;
+String position = params.position;
+long targetId = params.targetId;
+def recoId = params.recoId;
+String scientificName = params.scientificName;
+String status = params.status;
+String rank = params.rank;
+List breadCrumbs = params.breadCrumbs;
+List bulkIds = params.bulkIds;
+List deleteRecoIds = params.deleteRecoIds;
+List transferRecoIds = params.transferRecoIds;
+def newId = params.newId;
+
+List recoVotes = ctx._source.all_reco_vote;
+if (recoVotes != null) {
+    int size = recoVotes.size();
+    for (int i = 0; i < size; i++) {
+        def reco = recoVotes.get(i);
+        if (reco?.scientific_name == null) continue;
+
+        def sciName = reco.scientific_name;
+        if (reco?.recommendation_id == recoId && (deleteRecoIds == null || !deleteRecoIds.contains(reco.recommendation_id))){
+        	if (scientificName!=null){
+        		sciName.name = scientificName;
+        		updated = true;
+        	}
+        } else if (deleteRecoIds != null && deleteRecoIds.contains(reco.recommendation_id)){
+        	sciName.accepted_name_id = null;
+        	sciName.taxon_detail = null;
+        	updated = true;
+        }
+
+        def taxonDetail = sciName.taxon_detail;
+        if (taxonDetail != null && taxonDetail.id == targetId && (deleteRecoIds == null || !deleteRecoIds.contains(reco.recommendation_id))) {
+        	if (newName != null){
+	            taxonDetail.name            = newName;
+	            taxonDetail.scientific_name = normalizedName;
+	            taxonDetail.italicised_form = italicisedName;
+	            taxonDetail.canonical_form  = canonicalName;
+	            updated = true;
+            }
+            if (position!=null){
+            	taxonDetail.position        = position;
+            	updated = true;
+            }
+            if (status!=null){
+	            if (taxonDetail.status != status) {
+	            	if (status == "ACCEPTED"){
+	            		sciName.accepted_name_id = targetId;
+	            	} else {
+	            		sciName.accepted_name_id = newId;
+	            	}
+	            }
+	            taxonDetail.status          = status;
+	            updated = true;
+            }
+            if (rank!=null){
+            	taxonDetail.rank            = rank;
+            	updated = true;
+            }
+        } else if (transferRecoIds != null && transferRecoIds.contains(reco.recommendation_id)){
+        	sciName.accepted_name_id = newId;
+        	if (bulkIds != null && bulkIds.contains(reco.recommendation_id)){
+        	 sciName.taxon_detail = newId;
+        	}
+        	updated = true;
+        } else if (taxonDetail != null && bulkIds != null && bulkIds.contains(reco.recommendation_id)){
+        	if (position!=null){
+            	taxonDetail.position        = position;
+            	updated = true;
+            }
+        }
+    }
+}
+
+List hierarchy = ctx._source.max_voted_reco?.hierarchy;
+if (hierarchy != null && breadCrumbs != null && (deleteRecoIds == null || !deleteRecoIds.contains(ctx._source.max_voted_reco?.id))) {
+    int cutIndex = -1;
+    for (int i = 0; i < hierarchy.size(); i++) {
+        def entry = hierarchy.get(i);
+        if(bulkIds != null && bulkIds.contains(entry?.taxon_id) && newId!=null){
+        	cutIndex = i;
+        	break;
+        }
+        else if (entry?.taxon_id == targetId) {
+            cutIndex = i;
+            break;
+        }
+    }
+    
+    if (cutIndex != -1) {
+       List trimmed = new ArrayList();
+       int loopSize = breadCrumbs.size();
+       if (ctx._source.max_voted_reco.rank == rank) {
+       		loopSize = loopSize -1 ;
+       }
+       for (int i = 0; i < breadCrumbs.size(); i++) {
+            def crumb = breadCrumbs.get(i);
+            def entry = new HashMap();
+            entry.put("taxon_id", crumb.get("taxon_id"));
+            entry.put("normalized_name", crumb.get("taxon_name"));
+            entry.put("rank", crumb.get("taxon_rank"));
+            trimmed.add(entry);
+       }
+       for (int i = cutIndex + 1; i < hierarchy.size(); i++) {
+            trimmed.add(hierarchy.get(i));
+       }
+       ctx._source.max_voted_reco.hierarchy = trimmed;
+       updated = true;
+    }
+} else if(deleteRecoIds != null && deleteRecoIds.contains(ctx._source.max_voted_reco?.id)){
+	ctx._source.max_voted_reco.hierarchy = null;
+    updated = true;
+} else if (hierarchy == null && breadCrumbs != null && ctx._source.max_voted_reco?.id == recoId) {
+    List trimmed = new ArrayList();
+    for (int i = 0; i < breadCrumbs.size(); i++) {
+        def crumb = breadCrumbs.get(i);
+        def entry = new HashMap();
+        entry.put("taxon_id", crumb.get("taxon_id"));
+        entry.put("normalized_name", crumb.get("taxon_name"));
+        entry.put("rank", crumb.get("taxon_rank"));
+        trimmed.add(entry);
+    }
+    ctx._source.max_voted_reco.hierarchy = trimmed;
+    updated = true;
+} else if (hierarchy != null && breadCrumbs == null) {
+	if (ctx._source.max_voted_reco.taxonstatus != status && status == "SYNONYM" && ctx._source.max_voted_reco?.id == recoId) {
+    	ctx._source.max_voted_reco.hierarchy = null;
+    	updated = true;
+    }
+    else if (newName!=null){
+    	int size = hierarchy.size();
+    	for (int i = 0; i < size; i++) {
+        	def entry = hierarchy.get(i);
+	        if (entry?.taxon_id == targetId) {
+	            entry.normalized_name = normalizedName;
+	            updated = true;
+	        }
+        }
+     }
+}
+
+if (ctx._source.max_voted_reco?.id == recoId && (deleteRecoIds == null || !deleteRecoIds.contains(ctx._source.max_voted_reco?.id))) {
+	if (newName!=null){
+	    ctx._source.max_voted_reco.scientific_name = scientificName;
+	    ctx._source.max_voted_reco.italicised_form = italicisedName;
+	    updated = true;
+    }
+    if (rank!=null) {
+    	ctx._source.max_voted_reco.rank = rank;
+    	updated = true;
+    }
+    if (status!=null){
+    	ctx._source.max_voted_reco.taxonstatus = status;
+    	updated = true;
+    }
+} else if (deleteRecoIds != null && deleteRecoIds.contains(ctx._source.max_voted_reco?.id)){
+	ctx._source.max_voted_reco.italicised_form = null;
+	ctx._source.max_voted_reco.rank = null;
+	ctx._source.max_voted_reco.taxonstatus = null;
+	updated = true;
+}
+
+if (updated) {
+    ctx._source.last_revised = params.timestamp;
+} else {
+    ctx.op = 'noop';
+}

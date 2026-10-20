@@ -6,13 +6,11 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.elasticsearch.action.search.SearchRequest;
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.client.RequestOptions;
-import org.elasticsearch.index.query.GeoBoundingBoxQueryBuilder;
-import org.elasticsearch.index.query.QueryBuilder;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
+import co.elastic.clients.elasticsearch._types.GeoLocation;
+import co.elastic.clients.elasticsearch._types.LatLonGeoLocation;
+import co.elastic.clients.elasticsearch._types.query_dsl.GeoBoundingBoxQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
 
 import com.strandls.es.ElasticSearchClient;
 import com.strandls.esmodule.binning.models.Feature;
@@ -24,10 +22,10 @@ import com.strandls.esmodule.binning.services.GeojsonService;
 import jakarta.inject.Inject;
 
 /**
- * Services for {@link GeojsonData}
+ * Services for {@link GeojsonData} Migrated to Elasticsearch 9.x Java API
+ * Client
  *
  * @author mukund
- *
  */
 public class GeojsonServiceImpl implements GeojsonService {
 
@@ -51,8 +49,20 @@ public class GeojsonServiceImpl implements GeojsonService {
 
 			// properties
 			Map<String, Object> properties = new HashMap<>();
-			GeoBoundingBoxQueryBuilder query = QueryBuilders.geoBoundingBoxQuery(geoField)
-					.setCorners(coordinates[0][1][1], coordinates[0][0][0], coordinates[0][0][1], coordinates[0][2][0]);
+
+			// Create GeoHashBox query using new ES 9 API
+			final double top = coordinates[0][1][1];
+			final double left = coordinates[0][0][0];
+			final double bottom = coordinates[0][0][1];
+			final double right = coordinates[0][2][0];
+
+			Query query = GeoBoundingBoxQuery
+					.of(g -> g.field(geoField).boundingBox(b -> b.tlbr(tlbr -> tlbr
+							.topLeft(GeoLocation.of(gl -> gl.latlon(LatLonGeoLocation.of(ll -> ll.lat(top).lon(left)))))
+							.bottomRight(GeoLocation
+									.of(gl -> gl.latlon(LatLonGeoLocation.of(ll -> ll.lat(bottom).lon(right))))))))
+					._toQuery();
+
 			long count = querySearch(index, type, query);
 			properties.put("doc_count", count);
 
@@ -66,18 +76,11 @@ public class GeojsonServiceImpl implements GeojsonService {
 		return new GeojsonData(geojson, maxCount, minCount);
 	}
 
-	private long querySearch(String index, String type, QueryBuilder query) throws IOException {
+	private long querySearch(String index, String type, Query query) throws IOException {
 
-		SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+		SearchResponse<Void> searchResponse = client.getClient().search(s -> s.index(index).query(query), Void.class);
 
-		sourceBuilder.query(query);
-
-		SearchRequest searchRequest = new SearchRequest(index);
-		searchRequest.source(sourceBuilder);
-
-		SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-
-		return searchResponse.getHits().getTotalHits().value;
+		return searchResponse.hits().total() != null ? searchResponse.hits().total().value() : 0;
 	}
 
 }
