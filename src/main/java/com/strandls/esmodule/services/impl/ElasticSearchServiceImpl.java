@@ -12,8 +12,10 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -33,6 +35,8 @@ import co.elastic.clients.elasticsearch._types.mapping.TypeMapping;
 import co.elastic.clients.elasticsearch._types.query_dsl.*;
 import co.elastic.clients.elasticsearch.core.*;
 import co.elastic.clients.elasticsearch.core.bulk.*;
+import co.elastic.clients.elasticsearch.core.msearch.MultiSearchResponseItem;
+import co.elastic.clients.elasticsearch.core.msearch.RequestItem;
 import co.elastic.clients.elasticsearch.core.search.*;
 import co.elastic.clients.elasticsearch.indices.*;
 import co.elastic.clients.elasticsearch.indices.get_mapping.IndexMappingRecord;
@@ -70,6 +74,7 @@ import com.strandls.esmodule.models.ObservationMapInfo;
 import com.strandls.esmodule.models.ObservationNearBy;
 import com.strandls.esmodule.models.SimilarObservation;
 import com.strandls.esmodule.models.SpeciesGroup;
+import com.strandls.esmodule.models.TaxonMatchQuery;
 import com.strandls.esmodule.models.TaxonomyBulkUpdateData;
 import com.strandls.esmodule.models.TaxonomyUpdateData;
 import com.strandls.esmodule.models.TraitValue;
@@ -364,6 +369,8 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 			logger.info(" For index: {}, type: {}, bulk update id: {}, the status is {}", indexParam, typeParam,
 					item.id(), queryStatus);
+			
+			System.out.println(failureReason);
 
 			responses.add(new MapQueryResponse(queryStatus, failureReason.toString()));
 		}
@@ -2832,5 +2839,220 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 		}
 		return JsonData.of(value);
 	}
-
+	
+	private static final int MSEARCH_BATCH_SIZE = 200;
+	 
+	private static final String SCIENTIFIC_FIELD = "name.raw";
+	private static final String CANONICAL_FIELD = "canonical_form.keyword";
+ 
+	@Override
+	public List<List<ExtendedTaxonDefinition>> bulkMatchPhrase(String index, List<TaxonMatchQuery> queries) {
+ 
+		// Result slot per input query, in input order; empty list = no match
+		List<List<ExtendedTaxonDefinition>> out = new ArrayList<>(queries.size());
+		for (int i = 0; i < queries.size(); i++) {
+			out.add(new ArrayList<>());
+		}
+ 
+		// ---- De-duplicate identical (scientificText, canonicalText) pairs ----
+		Map<String, TaxonMatchQuery> uniqueQueries = new LinkedHashMap<>();
+		Map<String, List<Integer>> positions = new HashMap<>();
+		for (int i = 0; i < queries.size(); i++) {
+			TaxonMatchQuery q = queries.get(i);
+			if (q == null || q.getCanonicalText() == null || q.getCanonicalText().isBlank()) {
+				continue; // nothing to match on
+			}
+			String key = matchKey(q);
+			uniqueQueries.putIfAbsent(key, q);
+			positions.computeIfAbsent(key, k -> new ArrayList<>()).add(i);
+		}
+		if (uniqueQueries.isEmpty()) {
+			return out;
+		}
+ 
+		Map<String, List<ExtendedTaxonDefinition>> resultsByKey = new HashMap<>();
+ 
+		// ---- Pass 1: primary query (scientific AND canonical, or canonical only) ----
+		List<String> noHitKeys = new ArrayList<>();
+		runMsearch(index, new ArrayList<>(uniqueQueries.keySet()), key -> primaryQuery(uniqueQueries.get(key)),
+				resultsByKey, noHitKeys);
+ 
+		// ---- Pass 2: canonical-only fallback, same as matchPhrase() ----
+		// Only needed where pass 1 also used the scientific name; otherwise it
+		// would just repeat the same query.
+		List<String> fallbackKeys = new ArrayList<>();
+		for (String key : noHitKeys) {
+			if (hasText(uniqueQueries.get(key).getScientificText())) {
+				fallbackKeys.add(key);
+			}
+		}
+		if (!fallbackKeys.isEmpty()) {
+			runMsearch(index, fallbackKeys, key -> canonicalOnlyQuery(uniqueQueries.get(key)), resultsByKey, null);
+		}
+ 
+		// ---- Map results back to every original position ----
+		for (Map.Entry<String, List<Integer>> entry : positions.entrySet()) {
+			List<ExtendedTaxonDefinition> matched = resultsByKey.get(entry.getKey());
+			if (matched == null) {
+				continue;
+			}
+			for (Integer pos : entry.getValue()) {
+				// Own copy per slot, so ranking one slot can't affect another
+				out.set(pos, new ArrayList<>(matched));
+			}
+		}
+		return out;
+	}
+ 
+	/**
+	 * Runs one sub-search per key via _msearch, in batches. Results with hits go
+	 * into {@code results}; keys with zero hits are added to {@code noHitKeys}
+	 * (if not null). Failed sub-searches / batches are logged and left empty.
+	 */
+	private void runMsearch(String index, List<String> keys, Function<String, Query> queryFor,
+			Map<String, List<ExtendedTaxonDefinition>> results, List<String> noHitKeys) {
+ 
+		for (int start = 0; start < keys.size(); start += MSEARCH_BATCH_SIZE) {
+			List<String> batch = keys.subList(start, Math.min(start + MSEARCH_BATCH_SIZE, keys.size()));
+ 
+			List<RequestItem> items = new ArrayList<>(batch.size());
+			for (String key : batch) {
+				Query query = queryFor.apply(key);
+				items.add(RequestItem.of(r -> r.header(h -> h.index(index)).body(b -> b.query(query).size(10000)
+						.source(src -> src.filter(f -> f.excludes(Arrays.asList(Constants.TIMESTAMP, Constants.VERSION)))))));
+			}
+ 
+			try {
+				MsearchResponse<Map> response = client.getClient().msearch(m -> m.searches(items), Map.class);
+				List<MultiSearchResponseItem<Map>> responses = response.responses();
+ 
+				for (int j = 0; j < Math.min(responses.size(), batch.size()); j++) {
+					String key = batch.get(j);
+					MultiSearchResponseItem<Map> item = responses.get(j);
+ 
+					if (item.isFailure()) {
+						logger.error("msearch sub-query failed for '{}': {}", key, item.failure().error().reason());
+						continue;
+					}
+ 
+					List<Hit<Map>> hits = item.result().hits().hits();
+					if (hits.isEmpty()) {
+						if (noHitKeys != null) {
+							noHitKeys.add(key);
+						}
+						continue;
+					}
+					results.put(key, convertMsearchHits(hits));
+				}
+			} catch (Exception e) {
+				logger.error("msearch batch starting at {} failed: {}", start, e.getMessage(), e);
+			}
+		}
+	}
+ 
+	private Query primaryQuery(TaxonMatchQuery q) {
+		BoolQuery.Builder bool = new BoolQuery.Builder();
+		if (hasText(q.getScientificText())) {
+			bool.must(m -> m.match(mm -> mm.field(SCIENTIFIC_FIELD).query(q.getScientificText()).operator(Operator.And)));
+		}
+		bool.must(m -> m.matchPhrase(mp -> mp.field(CANONICAL_FIELD).query(q.getCanonicalText())));
+		return bool.build()._toQuery();
+	}
+ 
+	private Query canonicalOnlyQuery(TaxonMatchQuery q) {
+		return Query.of(qb -> qb.matchPhrase(mp -> mp.field(CANONICAL_FIELD).query(q.getCanonicalText())));
+	}
+ 
+	private static String matchKey(TaxonMatchQuery q) {
+		String sci = q.getScientificText() != null ? q.getScientificText() : "";
+		return sci + "\u0000" + q.getCanonicalText();
+	}
+ 
+	private static boolean hasText(String s) {
+		return s != null && !s.isEmpty();
+	}
+ 
+	/**
+	 * Converts _msearch hits to ExtendedTaxonDefinition. Same conversion as
+	 * processElasticResponse(); named separately so it doesn't clash with the
+	 * existing processHits(). Existing methods are left unchanged.
+	 */
+	private List<ExtendedTaxonDefinition> convertMsearchHits(List<Hit<Map>> hits) {
+		List<ExtendedTaxonDefinition> matchedResults = new ArrayList<>();
+		for (Hit<Map> hit : hits) {
+			try {
+				if (hit.source() != null) {
+					matchedResults.add(objectMapper.convertValue(hit.source(), ExtendedTaxonDefinition.class));
+				}
+			} catch (Exception e) {
+				logger.error(e.getMessage(), e);
+			}
+		}
+		return matchedResults;
+	}
+	
+	private static final String EXTENDED_SPECIES_INDEX = "extended_species_v1.0";
+	private static final String SPECIES_TAXON_CONCEPT_FIELD = "species.taxonConceptId";
+	private static final String SPECIES_ID_FIELD = "species.id";
+	private static final String SPECIES_DELETED_FIELD = "species.isDeleted";
+ 
+	/** Taxon concept ids per terms query. */
+	private static final int SPECIES_ID_BATCH_SIZE = 1000;
+ 
+	@Override
+	public Map<Long, Long> getSpeciesIdsByTaxonConceptIds(List<Long> taxonConceptIds) {
+		Map<Long, Long> out = new LinkedHashMap<>();
+ 
+		// De-duplicate, drop nulls
+		List<Long> uniqueIds = new ArrayList<>(new LinkedHashSet<>(taxonConceptIds));
+		uniqueIds.removeIf(Objects::isNull);
+ 
+		for (int start = 0; start < uniqueIds.size(); start += SPECIES_ID_BATCH_SIZE) {
+			List<Long> batch = uniqueIds.subList(start, Math.min(start + SPECIES_ID_BATCH_SIZE, uniqueIds.size()));
+			List<FieldValue> values = batch.stream().map(FieldValue::of).collect(Collectors.toList());
+ 
+			try {
+				SearchResponse<Map> response = client.getClient().search(s -> s.index(EXTENDED_SPECIES_INDEX)
+						.size(10000)
+						// Only fetch the two fields we need — the documents are large
+						.source(src -> src.filter(f -> f.includes(SPECIES_ID_FIELD, SPECIES_TAXON_CONCEPT_FIELD)))
+						.query(q -> q.bool(b -> b
+								.filter(f -> f.terms(t -> t.field(SPECIES_TAXON_CONCEPT_FIELD).terms(tv -> tv.value(values))))
+								.mustNot(mn -> mn.term(t -> t.field(SPECIES_DELETED_FIELD).value(true))))),
+						Map.class);
+ 
+				long total = response.hits().total() != null ? response.hits().total().value() : 0L;
+				if (total > response.hits().hits().size()) {
+					logger.warn("Species id lookup: {} hits but only {} returned for batch starting at {}", total,
+							response.hits().hits().size(), start);
+				}
+ 
+				for (Hit<Map> hit : response.hits().hits()) {
+					Map<?, ?> source = hit.source();
+					if (source == null || !(source.get("species") instanceof Map)) {
+						continue;
+					}
+					Map<?, ?> species = (Map<?, ?>) source.get("species");
+					Object taxonConceptObj = species.get("taxonConceptId");
+					Object speciesIdObj = species.get("id");
+					if (!(taxonConceptObj instanceof Number) || !(speciesIdObj instanceof Number)) {
+						continue;
+					}
+ 
+					Long taxonConceptId = ((Number) taxonConceptObj).longValue();
+					Long speciesId = ((Number) speciesIdObj).longValue();
+ 
+					Long existing = out.putIfAbsent(taxonConceptId, speciesId);
+					if (existing != null && !existing.equals(speciesId)) {
+						logger.warn("Taxon concept {} has multiple species ({}, {}); keeping {}", taxonConceptId,
+								existing, speciesId, existing);
+					}
+				}
+			} catch (Exception e) {
+				logger.error("Species id lookup failed for batch starting at {}: {}", start, e.getMessage(), e);
+			}
+		}
+		return out;
+	}
+ 
 }

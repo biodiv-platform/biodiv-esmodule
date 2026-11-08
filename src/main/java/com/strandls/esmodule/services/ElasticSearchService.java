@@ -21,6 +21,7 @@ import com.strandls.esmodule.models.MonthAggregation;
 import com.strandls.esmodule.models.ObservationInfo;
 import com.strandls.esmodule.models.ObservationLatLon;
 import com.strandls.esmodule.models.ObservationNearBy;
+import com.strandls.esmodule.models.TaxonMatchQuery;
 import com.strandls.esmodule.models.TaxonomyBulkUpdateData;
 import com.strandls.esmodule.models.TaxonomyUpdateData;
 import com.strandls.esmodule.models.UploadersInfo;
@@ -395,4 +396,8 @@ public interface ElasticSearchService {
 
 	public void speciesBulkUpdateByTaxonId(List<TaxonomyBulkUpdateData> taxonomyData, Query speciesQuery)
 			throws IOException;
+
+	public List<List<ExtendedTaxonDefinition>> bulkMatchPhrase(String index, List<TaxonMatchQuery> queries);
+
+	public Map<Long, Long> getSpeciesIdsByTaxonConceptIds(List<Long> taxonConceptIds);
 }

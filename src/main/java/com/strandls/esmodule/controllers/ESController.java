@@ -32,6 +32,7 @@ import com.strandls.esmodule.models.MonthAggregation;
 import com.strandls.esmodule.models.ObservationInfo;
 import com.strandls.esmodule.models.ObservationLatLon;
 import com.strandls.esmodule.models.ObservationNearBy;
+import com.strandls.esmodule.models.TaxonMatchQuery;
 import com.strandls.esmodule.models.TaxonomyBulkUpdateData;
 import com.strandls.esmodule.models.TaxonomyBulkUpdateRequest;
 import com.strandls.esmodule.models.TaxonomyUpdateData;
@@ -1173,5 +1174,62 @@ public class ESController {
 					.build();
 		}
 	}
-
+	
+	@POST
+	@Path("/bulk" + ApiConstants.MATCH)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Bulk Match In Elastic (etd / name / canonical_form)", description = "Result i is the ranked list of matches for query i (empty list if none)")
+	@ApiResponses({
+			// Body is List<List<ExtendedTaxonDefinition>>. Declared as Object because
+			// Swagger can't describe nested arrays; the client converts it.
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = Object.class))),
+			@ApiResponse(responseCode = "500", description = "ERROR") })
+	public Response bulkMatch(List<TaxonMatchQuery> queries) {
+ 
+		if (queries == null || queries.isEmpty()) {
+			return Response.status(Response.Status.OK).entity(new ArrayList<>()).build();
+		}
+ 
+		String index = utilityMethods.getEsIndexConstants("etd");
+ 
+		try {
+			List<List<ExtendedTaxonDefinition>> results = elasticSearchService.bulkMatchPhrase(index, queries);
+ 
+			// Same ranking as the single match endpoint, applied per query
+			for (int i = 0; i < results.size(); i++) {
+				List<ExtendedTaxonDefinition> records = results.get(i);
+				if (records.size() > 1) {
+					TaxonMatchQuery q = queries.get(i);
+					results.set(i, utilityMethods.rankDocument(records, "canonical_form",
+							q != null ? q.getScientificText() : null));
+				}
+			}
+			return Response.status(Response.Status.OK).entity(results).build();
+		} catch (Exception e) {
+			return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
+		}
+	}
+	
+	@POST
+	@Path("/bulk/speciesIds")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Get species ids for many taxon concept ids", description = "Returns a map of taxonConceptId -> speciesId. Taxon concepts with no (non-deleted) species are left out.")
+	@ApiResponses({
+			// Body is Map<Long, Long>. Declared as Object so the generated client
+			// doesn't guess a wrong type; the client casts it.
+			@ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = Object.class))),
+			@ApiResponse(responseCode = "500", description = "ERROR") })
+	public Response getBulkSpeciesIds(List<Long> taxonConceptIds) {
+		if (taxonConceptIds == null || taxonConceptIds.isEmpty()) {
+			return Response.status(Response.Status.OK).entity(new LinkedHashMap<>()).build();
+		}
+		try {
+			Map<Long, Long> result = elasticSearchService.getSpeciesIdsByTaxonConceptIds(taxonConceptIds);
+			return Response.status(Response.Status.OK).entity(result).build();
+		} catch (Exception e) {
+			return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
+		}
+	}
 }
