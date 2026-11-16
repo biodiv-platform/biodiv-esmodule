@@ -874,7 +874,7 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		// Build bool query
 		BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder();
-		Query searchDsl = getBoolQuery(searchQuery);
+		Query searchDsl = getBoolQueryBuilder(searchQuery).build()._toQuery();
 		if (searchDsl != null) {
 			boolQueryBuilder.must(searchDsl);
 		}
