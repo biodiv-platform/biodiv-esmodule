@@ -1480,14 +1480,35 @@ public class ElasticSearchServiceImpl extends ElasticSearchQueryUtil implements 
 
 		String cleanText = text.trim();
 
+		// The n-gram analysed field matches the text anywhere inside a word (e.g. "aves" in "flavescens"),
+		// and names that merely contain it outscore the exact name. The ".raw" keyword subfield holds the
+		// whole lowercased name, so exact and starts-with matches on it are boosted into separate score bands:
+		// exact (~11000+) > starts with (~1000+) > contains only (< ~250).
+		String rawField = normalizedField + ".raw";
+		String lowerText = cleanText.toLowerCase();
+
 		try {
 			SearchResponse<Map> searchResponse = client
 					.getClient().search(
 							s -> s.index(index).size(100)
 									.source(src -> src.filter(
 											f -> f.excludes(Arrays.asList(Constants.TIMESTAMP, Constants.VERSION))))
-									.query(q -> q.matchPhrasePrefix(
-											m -> m.field(normalizedField).query(cleanText).maxExpansions(1024))),
+									.query(q -> q.bool(b -> {
+										// exact whole-name match
+										b.should(sh -> sh.constantScore(cs -> cs
+												.filter(fq -> fq.term(t -> t.field(rawField).value(lowerText)))
+												.boost(10000f)));
+										// whole name starts with the text (skipped for 1-2 chars to keep it cheap)
+										if (lowerText.length() >= 3) {
+											b.should(sh -> sh.constantScore(cs -> cs
+													.filter(fq -> fq.prefix(p -> p.field(rawField).value(lowerText)))
+													.boost(1000f)));
+										}
+										// original n-gram match: text appears anywhere in the name
+										b.should(sh -> sh.matchPhrasePrefix(
+												m -> m.field(normalizedField).query(cleanText).maxExpansions(1024)));
+										return b.minimumShouldMatch("1");
+									})),
 							Map.class);
 
 			return mapSearchHits(searchResponse, classMapped);
